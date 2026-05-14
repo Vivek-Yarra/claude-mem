@@ -959,22 +959,12 @@ export class ChromaSync {
       return;
     }
 
-    // Allocate first so a constructor throw cannot leave the guard stuck true
-    // and silently skip every subsequent backfill (CodeRabbit review on PR
-    // #2282). The guard only flips to true after both resources are alive,
-    // and the finally always clears it.
     let db: SessionStore | undefined;
-    let sync: ChromaSync | undefined;
     try {
       db = storeOverride ?? new SessionStore();
-      sync = new ChromaSync('claude-mem');
     } catch (error) {
       logger.error('CHROMA_SYNC', 'Failed to initialize backfill resources',
         {}, error instanceof Error ? error : new Error(String(error)));
-      // Best-effort cleanup if SessionStore allocated but ChromaSync threw.
-      if (db && !storeOverride) {
-        try { db.close(); } catch { /* ignore */ }
-      }
       throw error;
     }
 
@@ -990,7 +980,9 @@ export class ChromaSync {
         logger.info('CHROMA_SYNC', 'Watermark cache missing — bootstrapping from Chroma (one-time)');
         for (const { project } of projects) {
           try {
-            await sync.bootstrapWatermarksFromChroma(project);
+            const projectSync = new ChromaSync(project);
+            await projectSync.bootstrapWatermarksFromChroma(project);
+            await projectSync.close();
           } catch (error) {
             logger.error('CHROMA_SYNC', `Bootstrap failed for project: ${project}`,
               {}, error instanceof Error ? error : new Error(String(error)));
@@ -999,16 +991,18 @@ export class ChromaSync {
         logger.info('CHROMA_SYNC', 'Bootstrap complete — incremental backfills will use watermarks');
       }
 
-      // Process projects in chunks of BACKFILL_CONCURRENCY_LIMIT to bound
-      // CPU/memory pressure from concurrent Chroma embedding operations.
-      // Each chunk runs its projects in parallel; we wait for the entire chunk
-      // before starting the next one. Simple and predictable — no semaphore
-      // overhead, no unbounded fan-out.
       const concurrency = ChromaSync.BACKFILL_CONCURRENCY_LIMIT;
       for (let i = 0; i < projects.length; i += concurrency) {
         const chunk = projects.slice(i, i + concurrency);
         const chunkResults = await Promise.allSettled(
-          chunk.map(({ project }) => sync!.ensureBackfilled(project, db!))
+          chunk.map(async ({ project }) => {
+            const projectSync = new ChromaSync(project);
+            try {
+              await projectSync.ensureBackfilled(project, db!);
+            } finally {
+              await projectSync.close();
+            }
+          })
         );
 
         for (let j = 0; j < chunkResults.length; j++) {
@@ -1027,12 +1021,6 @@ export class ChromaSync {
       }
     } finally {
       ChromaSync.backfillInProgress = false;
-      if (sync) {
-        try { await sync.close(); } catch (closeError) {
-          logger.debug('CHROMA_SYNC', 'sync.close() failed during backfill teardown',
-            {}, closeError instanceof Error ? closeError : new Error(String(closeError)));
-        }
-      }
       if (!storeOverride && db) {
         try { db.close(); } catch (closeError) {
           logger.debug('CHROMA_SYNC', 'db.close() failed during backfill teardown',
