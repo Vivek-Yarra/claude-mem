@@ -49,7 +49,8 @@ export function queryObservations(
         SELECT 1 FROM json_each(o.concepts)
         WHERE value IN (${conceptPlaceholders})
       )
-    ORDER BY o.created_at_epoch DESC
+    ORDER BY (CASE WHEN o.relevance_count > 0 THEN 1 ELSE 0 END) DESC,
+             o.created_at_epoch DESC
     LIMIT ?
   `).all(
     project,
@@ -123,7 +124,8 @@ export function queryObservationsMulti(
         SELECT 1 FROM json_each(o.concepts)
         WHERE value IN (${conceptPlaceholders})
       )
-    ORDER BY o.created_at_epoch DESC
+    ORDER BY (CASE WHEN o.relevance_count > 0 THEN 1 ELSE 0 END) DESC,
+             o.created_at_epoch DESC
     LIMIT ?
   `).all(
     ...projects,
