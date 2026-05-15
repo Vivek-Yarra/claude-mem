@@ -304,11 +304,13 @@ export class WorkerService implements WorkerRef {
 
   private async initializeBackground(): Promise<void> {
     try {
+      const bgT0 = Date.now();
       logger.info('WORKER', 'Background initialization starting...');
 
       const { ModeManager } = await import('./domain/ModeManager.js');
       const { SettingsDefaultsManager } = await import('../shared/SettingsDefaultsManager.js');
       const { USER_SETTINGS_PATH } = await import('../shared/paths.js');
+      logger.info('PERF', `Dynamic imports: ${Date.now() - bgT0}ms`);
 
       const settings = SettingsDefaultsManager.loadFromFile(USER_SETTINGS_PATH);
 
@@ -351,8 +353,10 @@ export class WorkerService implements WorkerRef {
         logger.info('SYSTEM', 'Chroma disabled via CLAUDE_MEM_CHROMA_ENABLED=false, skipping ChromaMcpManager');
       }
 
+      const dbT0 = Date.now();
       logger.info('WORKER', 'Initializing database manager...');
       await this.dbManager.initialize();
+      logger.info('PERF', `dbManager.initialize: ${Date.now() - dbT0}ms`);
 
       const sweepResult = this.dbManager.getSessionStore().db.prepare(`
         UPDATE pending_messages
@@ -366,6 +370,7 @@ export class WorkerService implements WorkerRef {
 
       runOneTimeV12_4_3Cleanup();
 
+      const searchT0 = Date.now();
       logger.info('WORKER', 'Initializing search services...');
       const formattingService = new FormattingService();
       const timelineService = new TimelineService();
@@ -393,10 +398,12 @@ export class WorkerService implements WorkerRef {
       );
       const knowledgeAgent = new KnowledgeAgent(this.corpusStore);
       this.server.registerRoutes(new CorpusRoutes(this.corpusStore, corpusBuilder, knowledgeAgent));
+      logger.info('PERF', `Search + corpus init: ${Date.now() - searchT0}ms`);
       logger.info('WORKER', 'CorpusRoutes registered');
 
       this.initializationCompleteFlag = true;
       this.resolveInitialization();
+      logger.info('PERF', `Total background init: ${Date.now() - bgT0}ms`);
       logger.info('SYSTEM', 'Core initialization complete (DB + search ready)');
 
       await this.startTranscriptWatcher(settings);
@@ -1077,13 +1084,20 @@ async function main() {
         process.exit(1);
       }
 
+      const hookT0 = Date.now();
       const workerStartResult = await ensureWorkerStarted(port);
+      const hookT1 = Date.now();
+      logger.info('PERF', `ensureWorkerStarted took ${hookT1 - hookT0}ms, result=${workerStartResult}`, { event, platform });
       if (workerStartResult === 'dead') {
         logger.warn('SYSTEM', 'Worker failed to start before hook, handler will proceed gracefully');
       }
 
       const { hookCommand } = await import('../cli/hook-command.js');
+      const hookT2 = Date.now();
+      logger.info('PERF', `hookCommand import took ${hookT2 - hookT1}ms`, { event });
       await hookCommand(platform, event);
+      const hookT3 = Date.now();
+      logger.info('PERF', `hookCommand(${event}) execution took ${hookT3 - hookT2}ms, total hook ${hookT3 - hookT0}ms`, { event, platform });
       break;
     }
 
