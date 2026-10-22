@@ -28,6 +28,7 @@ import { basename, dirname, join, resolve } from 'path';
 import { LAUNCHER_PROTOCOL } from './launcher-protocol.js';
 import { bunVersionHonoursBunBeBun } from './bun-be-bun-support.js';
 import { findBun } from './bun-runtime.js';
+import { ALL_MARKETPLACE_NAMES, PLUGIN_NAME, PLUGIN_SETTINGS_KEY } from '../shared/marketplace.js';
 
 const IS_WINDOWS = process.platform === 'win32';
 const STDIN_COLLECTION_TIMEOUT_MS = 5000;
@@ -109,10 +110,13 @@ function resolvePluginRootForLauncher(): string | null {
   for (const environmentRoot of [process.env.CLAUDE_PLUGIN_ROOT, process.env.PLUGIN_ROOT]) {
     if (environmentRoot) candidateRoots.push(environmentRoot);
   }
-  candidateRoots.push(
-    ...listCacheVersionRootsDescending(join(claudeConfigDirectory, 'plugins', 'cache', 'thedotmack', 'claude-mem')),
-  );
-  candidateRoots.push(join(claudeConfigDirectory, 'plugins', 'marketplaces', 'thedotmack', 'plugin'));
+  // Current marketplace name first (cache, then marketplace dir), legacy names after.
+  for (const marketplaceName of ALL_MARKETPLACE_NAMES) {
+    candidateRoots.push(
+      ...listCacheVersionRootsDescending(join(claudeConfigDirectory, 'plugins', 'cache', marketplaceName, PLUGIN_NAME)),
+    );
+    candidateRoots.push(join(claudeConfigDirectory, 'plugins', 'marketplaces', marketplaceName, 'plugin'));
+  }
 
   for (const candidateRoot of candidateRoots) {
     // Same normalization as the bash template's `_E` handling: trim a trailing
@@ -140,7 +144,7 @@ function isPluginDisabledInClaudeSettings(): boolean {
     return Boolean(
       settings &&
       settings.enabledPlugins &&
-      settings.enabledPlugins['claude-mem@thedotmack'] === false
+      settings.enabledPlugins[PLUGIN_SETTINGS_KEY] === false
     );
   } catch {
     return false;

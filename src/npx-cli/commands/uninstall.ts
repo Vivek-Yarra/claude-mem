@@ -15,6 +15,7 @@ import {
 import { readJsonSafe } from '../../utils/json-utils.js';
 import { SettingsDefaultsManager } from '../../shared/SettingsDefaultsManager.js';
 import { USER_SETTINGS_PATH } from '../../shared/paths.js';
+import { ALL_MARKETPLACE_NAMES, PLUGIN_NAME } from '../../shared/marketplace.js';
 import { updateSettingsDocument } from '../../shared/settings-document.js';
 import { shutdownWorkerAndWait, type ShutdownResult } from '../../services/install/shutdown-helper.js';
 import { getWorkerPort } from '../../shared/worker-utils.js';
@@ -60,38 +61,54 @@ export function clearServerRuntimeSettings(
   return true;
 }
 
+// Uninstall removes the current marketplace name and any legacy name.
 function removeMarketplaceDirectory(): boolean {
-  const marketplaceDir = marketplaceDirectory();
-  if (existsSync(marketplaceDir)) {
-    rmSync(marketplaceDir, { recursive: true, force: true });
-    return true;
+  let removed = false;
+  for (const name of ALL_MARKETPLACE_NAMES) {
+    const marketplaceDir = join(pluginsDirectory(), 'marketplaces', name);
+    if (existsSync(marketplaceDir)) {
+      rmSync(marketplaceDir, { recursive: true, force: true });
+      removed = true;
+    }
   }
-  return false;
+  return removed;
 }
 
 function removeCacheDirectory(): boolean {
-  const cacheDirectory = join(pluginsDirectory(), 'cache', 'thedotmack', 'claude-mem');
-  if (existsSync(cacheDirectory)) {
-    rmSync(cacheDirectory, { recursive: true, force: true });
-    return true;
+  let removed = false;
+  for (const name of ALL_MARKETPLACE_NAMES) {
+    const cacheDirectory = join(pluginsDirectory(), 'cache', name, PLUGIN_NAME);
+    if (existsSync(cacheDirectory)) {
+      rmSync(cacheDirectory, { recursive: true, force: true });
+      removed = true;
+    }
   }
-  return false;
+  return removed;
 }
 
 function removeFromKnownMarketplaces(): void {
   const knownMarketplaces = readJsonSafe<Record<string, any>>(knownMarketplacesPath(), {});
-  if (knownMarketplaces['thedotmack']) {
-    delete knownMarketplaces['thedotmack'];
-    writeJsonFileAtomic(knownMarketplacesPath(), knownMarketplaces);
+  let dirty = false;
+  for (const name of ALL_MARKETPLACE_NAMES) {
+    if (knownMarketplaces[name]) {
+      delete knownMarketplaces[name];
+      dirty = true;
+    }
   }
+  if (dirty) writeJsonFileAtomic(knownMarketplacesPath(), knownMarketplaces);
 }
 
 function removeFromInstalledPlugins(): void {
   const installedPlugins = readJsonSafe<Record<string, any>>(installedPluginsPath(), {});
-  if (installedPlugins.plugins?.['claude-mem@thedotmack']) {
-    delete installedPlugins.plugins['claude-mem@thedotmack'];
-    writeJsonFileAtomic(installedPluginsPath(), installedPlugins);
+  let dirty = false;
+  for (const name of ALL_MARKETPLACE_NAMES) {
+    const key = `${PLUGIN_NAME}@${name}`;
+    if (installedPlugins.plugins?.[key]) {
+      delete installedPlugins.plugins[key];
+      dirty = true;
+    }
   }
+  if (dirty) writeJsonFileAtomic(installedPluginsPath(), installedPlugins);
 }
 
 function stripLegacyClaudeMemAlias(): void {
@@ -129,9 +146,12 @@ export function removeFromClaudeSettings(): void {
   const settings = readJsonSafe<Record<string, any>>(claudeSettingsPath(), {});
   let dirty = false;
 
-  if (settings.enabledPlugins?.['claude-mem@thedotmack'] !== undefined) {
-    delete settings.enabledPlugins['claude-mem@thedotmack'];
-    dirty = true;
+  for (const name of ALL_MARKETPLACE_NAMES) {
+    const key = `${PLUGIN_NAME}@${name}`;
+    if (settings.enabledPlugins?.[key] !== undefined) {
+      delete settings.enabledPlugins[key];
+      dirty = true;
+    }
   }
 
   // Symmetric counterpart to disableClaudeAutoMemory() in install.ts. The
@@ -219,8 +239,9 @@ export function removeStrayClaudeMemPaths(home: string = homedir()): number {
     }
   }
 
-  const pluginDataDir = join(pluginsDirectory(), 'data', 'claude-mem-thedotmack');
-  if (existsSync(pluginDataDir)) {
+  for (const name of ALL_MARKETPLACE_NAMES) {
+    const pluginDataDir = join(pluginsDirectory(), 'data', `${PLUGIN_NAME}-${name}`);
+    if (!existsSync(pluginDataDir)) continue;
     try {
       rmSync(pluginDataDir, { recursive: true, force: true });
       removedCount++;

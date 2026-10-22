@@ -13,6 +13,7 @@ import { writeMcpJsonConfig, PLACEHOLDER_CONTEXT } from './McpIntegrations.js';
 import { readJsonSafe } from '../../utils/json-utils.js';
 import { injectContextIntoMarkdownFile } from '../../utils/context-injection.js';
 import { ANTIGRAVITY_HOOK_TIMEOUT_MS } from '../../shared/host-hook-limits.js';
+import { MARKETPLACE_NAME } from '../../shared/marketplace.js';
 
 // agy hook schema (builtin `agy-customizations/docs/hooks.md`): each top-level
 // key of hooks.json is a hook NAME, mapping to an object of event keys. Only
@@ -389,7 +390,7 @@ function registerAntigravityMcp(): void {
   const mcpServerPath = getMcpServerAbsolutePath();
   if (!mcpServerPath) {
     console.error('Could not find MCP server script');
-    console.error('   Expected at: ~/.claude/plugins/marketplaces/thedotmack/plugin/scripts/mcp-server.cjs');
+    console.error(`   Expected at: ~/.claude/plugins/marketplaces/${MARKETPLACE_NAME}/plugin/scripts/mcp-server.cjs`);
     throw new Error('MCP server script not found');
   }
 
@@ -411,7 +412,7 @@ export async function installAntigravityCliHooks(): Promise<number> {
   const workerServicePath = findWorkerServicePath();
   if (!workerServicePath) {
     console.error('Could not find worker-service.cjs');
-    console.error('   Expected at: ~/.claude/plugins/marketplaces/thedotmack/plugin/scripts/worker-service.cjs');
+    console.error(`   Expected at: ~/.claude/plugins/marketplaces/${MARKETPLACE_NAME}/plugin/scripts/worker-service.cjs`);
     return 1;
   }
 

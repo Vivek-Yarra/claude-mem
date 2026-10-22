@@ -11,8 +11,9 @@ import { parse as parseShell } from 'shell-quote';
 import { readJsonFileWithBom, writeJsonFileAtomic } from '../../shared/atomic-json.js';
 import { buildSpawnSyncInvocation, lookupWindowsCommand } from '../../shared/spawn.js';
 import { disableCodexPluginForHome, installCodexPluginForHome } from './CodexCliInstaller.js';
+import { MARKETPLACE_NAME, PLUGIN_SETTINGS_KEY } from '../../shared/marketplace.js';
 
-const CLAUDE_PLUGIN = 'claude-mem@thedotmack';
+const CLAUDE_PLUGIN = PLUGIN_SETTINGS_KEY;
 const CODEX_PLUGIN = 'claude-mem@claude-mem-local';
 type Driver = 'codex' | 'claudeAgent';
 type Document = Record<string, unknown>;
@@ -151,7 +152,7 @@ export function assertT3CodePluginLoading(provider: T3CodeProvider): void {
       throw new Error(`T3 Code provider ${provider.id} disables plugin MCP or hooks in launchArgs. Remove that override in T3 Code Settings, then reinstall.`);
     }
   } else if (args.some((arg, index) => (arg === '--disable' && args[index + 1] === 'hooks') || arg === '--disable=hooks'
-    || /^(?:features\.hooks|plugins\."?claude-mem@(?:claude-mem-local|thedotmack)"?\.enabled)\s*=\s*false$/.test(arg.replace(/^(?:--config|-c)=/, '')))) {
+    || /^(?:features\.hooks|plugins\."?claude-mem@(?:claude-mem-local|thedotmack|vivek-claude-mem)"?\.enabled)\s*=\s*false$/.test(arg.replace(/^(?:--config|-c)=/, '')))) {
     throw new Error(`T3 Code provider ${provider.id} disables Claude-Mem in launchArgs. Remove that override in T3 Code Settings, then reinstall.`);
   }
 }
@@ -208,7 +209,7 @@ function pluginAssetsPresent(provider: T3CodeProvider, spawn: NonNullable<T3Code
   } else {
     const marketplaces = join(provider.homePath, 'plugins', 'known_marketplaces.json');
     if (!existsSync(marketplaces)) return false;
-    const known = readDocument(marketplaces).thedotmack;
+    const known = readDocument(marketplaces)[MARKETPLACE_NAME];
     if (!isRecord(known) || typeof known.installLocation !== 'string' || !existsSync(join(known.installLocation, '.claude-plugin', 'marketplace.json'))) return false;
     const entries = JSON.parse(runProvider(provider, ['plugin', 'list', '--json'], spawn));
     if (!Array.isArray(entries)) return false;
@@ -249,17 +250,17 @@ export async function installT3Code(marketplaceRoot: string, options: T3CodeOpti
         } else {
           const knownPath = join(provider.homePath, 'plugins', 'known_marketplaces.json');
           const known = existsSync(knownPath) ? readDocument(knownPath) : {};
-          const marketplace = known.thedotmack;
+          const marketplace = known[MARKETPLACE_NAME];
           // The main installer already registers the default Claude home.
           if (!isRecord(marketplace)) {
             runProvider(provider, ['plugin', 'marketplace', 'add', root], spawn);
           } else if (marketplace.installLocation !== root
-            && (!isRecord(marketplace.source) || (marketplace.source.repo !== 'thedotmack/claude-mem' && marketplace.source.path !== root))) {
-            throw new Error('The thedotmack marketplace points to another source. Repair its registration with the main Claude-Mem installer.');
+            && (!isRecord(marketplace.source) || (marketplace.source.repo !== 'thedotmack/claude-mem' && marketplace.source.repo !== 'Vivek-Yarra/claude-mem' && marketplace.source.path !== root))) {
+            throw new Error(`The ${MARKETPLACE_NAME} marketplace points to another source. Repair its registration with the main Claude-Mem installer.`);
           } else if (marketplace.installLocation !== root) {
             // Keep other marketplace entries and installed plugins intact while
             // redirecting this provider to the bundle validated above.
-            known.thedotmack = { ...marketplace, source: { source: 'directory', path: root }, installLocation: root, lastUpdated: new Date().toISOString() };
+            known[MARKETPLACE_NAME] = { ...marketplace, source: { source: 'directory', path: root }, installLocation: root, lastUpdated: new Date().toISOString() };
             writeJsonFileAtomic(knownPath, known);
           }
           runProvider(provider, ['plugin', 'install', CLAUDE_PLUGIN, '--scope', 'user'], spawn);

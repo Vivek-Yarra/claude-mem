@@ -57,6 +57,7 @@ import { postCorpusRequestOverSse } from './corpus-worker-stream.js';
 import { withWorkerRestartOnRefusedConnection } from './worker-restart.js';
 import { ProgressiveSearchError, progressiveSearchToolError } from '../shared/progressive-search.js';
 import { formatMcpPayload, formatWorkerMcpResponse, mcpTextResult, workerFailureText, serverFailureText, type McpTextPurpose } from './mcp-text-format.js';
+import { ALL_MARKETPLACE_NAMES, MARKETPLACE_NAME, PLUGIN_NAME } from '../shared/marketplace.js';
 
 /** This server's checkout (Claude Code starts it in the workspace), resolved once. */
 let workspaceCheckout: ProjectContext | null = null;
@@ -1279,22 +1280,22 @@ process.on('SIGINT', cleanup);
 
 function detectMissingMarketplaceMarker(): void {
   const home = homedir();
-  const marketplaceCandidates = [
-    resolve(home, '.claude', 'plugins', 'marketplaces', 'thedotmack'),
-    resolve(home, '.config', 'claude', 'plugins', 'marketplaces', 'thedotmack'),
-  ];
+  const marketplaceCandidates = ALL_MARKETPLACE_NAMES.flatMap(name => [
+    resolve(home, '.claude', 'plugins', 'marketplaces', name),
+    resolve(home, '.config', 'claude', 'plugins', 'marketplaces', name),
+  ]);
   const present = marketplaceCandidates.some(p => p && existsSync(p));
-  const cacheCandidates = [
-    resolve(home, '.claude', 'plugins', 'cache', 'thedotmack', 'claude-mem'),
-    resolve(home, '.config', 'claude', 'plugins', 'cache', 'thedotmack', 'claude-mem'),
-  ];
+  const cacheCandidates = ALL_MARKETPLACE_NAMES.flatMap(name => [
+    resolve(home, '.claude', 'plugins', 'cache', name, PLUGIN_NAME),
+    resolve(home, '.config', 'claude', 'plugins', 'cache', name, PLUGIN_NAME),
+  ]);
   const cachePresent = cacheCandidates.some(p => p && existsSync(p));
   const cacheRoot = cacheCandidates[0];
 
   if (!present && cachePresent) {
     logger.error(
       'SYSTEM',
-      'claude-mem MCP started but no marketplace directory was found at ~/.claude/plugins/marketplaces/thedotmack or the XDG equivalent. The IDE plugin loader needs that directory to fire claude-mem hooks (SessionStart, PostToolUse, Stop, etc.). Without it, MCP search will work but no new memories will be captured. To self-heal, run: node ~/.claude/plugins/cache/thedotmack/claude-mem/*/scripts/smart-install.js (or reinstall the plugin from the marketplace).',
+      'claude-mem MCP started but no marketplace directory was found at ~/.claude/plugins/marketplaces/' + MARKETPLACE_NAME + ' or the XDG equivalent. The IDE plugin loader needs that directory to fire claude-mem hooks (SessionStart, PostToolUse, Stop, etc.). Without it, MCP search will work but no new memories will be captured. To self-heal, run: node ~/.claude/plugins/cache/' + MARKETPLACE_NAME + '/claude-mem/*/scripts/smart-install.js (or reinstall the plugin from the marketplace).',
       { marketplaceCandidates, cacheRoot }
     );
   }

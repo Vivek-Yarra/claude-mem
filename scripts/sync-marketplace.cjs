@@ -6,8 +6,10 @@ const path = require('path');
 const os = require('os');
 const { mirrorDirectory } = require('./mirror-dir.cjs');
 
-const INSTALLED_PATH = path.join(os.homedir(), '.claude', 'plugins', 'marketplaces', 'thedotmack');
-const CACHE_BASE_PATH = path.join(os.homedir(), '.claude', 'plugins', 'cache', 'thedotmack', 'claude-mem');
+// Keep in sync with MARKETPLACE_NAME in src/shared/marketplace.ts (tests/shared/marketplace.test.ts checks).
+const MARKETPLACE_NAME = 'vivek-claude-mem';
+const INSTALLED_PATH = path.join(os.homedir(), '.claude', 'plugins', 'marketplaces', MARKETPLACE_NAME);
+const CACHE_BASE_PATH = path.join(os.homedir(), '.claude', 'plugins', 'cache', MARKETPLACE_NAME, 'claude-mem');
 
 const BASE_EXCLUDES = [
   '.git',

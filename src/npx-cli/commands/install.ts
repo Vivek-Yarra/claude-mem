@@ -15,6 +15,7 @@ import { updateSettingsDocument } from '../../shared/settings-document.js';
 import { loadClaudeMemEnv, saveClaudeMemEnv } from '../../shared/EnvManager.js';
 import { ensureWorkerStarted, getLastWorkerBootFailure, type WorkerStartResult } from '../../services/worker-spawner.js';
 import { formatHostForUrl } from '../../shared/worker-utils.js';
+import { MARKETPLACE_NAME, PLUGIN_SETTINGS_KEY } from '../../shared/marketplace.js';
 import {
   ensureBun,
   ensureUv,
@@ -174,7 +175,7 @@ import { ensureLauncherOnPath, ensureLocalBinOnShellPath } from '../../launcher/
 function registerMarketplace(): void {
   const knownMarketplaces = readJsonSafe<Record<string, any>>(knownMarketplacesPath(), {});
 
-  knownMarketplaces['thedotmack'] = {
+  knownMarketplaces[MARKETPLACE_NAME] = {
     source: {
       source: 'github',
       repo: 'thedotmack/claude-mem',
@@ -197,7 +198,7 @@ function registerPlugin(version: string): void {
   const cachePath = pluginCacheDirectory(version);
   const now = new Date().toISOString();
 
-  installedPlugins.plugins['claude-mem@thedotmack'] = [
+  installedPlugins.plugins[PLUGIN_SETTINGS_KEY] = [
     {
       scope: 'user',
       installPath: cachePath,
@@ -214,7 +215,7 @@ function enablePluginInClaudeSettings(): void {
   const settings = readJsonSafe<Record<string, any>>(claudeSettingsPath(), {});
 
   if (!settings.enabledPlugins) settings.enabledPlugins = {};
-  settings.enabledPlugins['claude-mem@thedotmack'] = true;
+  settings.enabledPlugins[PLUGIN_SETTINGS_KEY] = true;
 
   writeJsonFileAtomic(claudeSettingsPath(), settings);
 }

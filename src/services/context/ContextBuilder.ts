@@ -54,12 +54,14 @@ import {
   HEADER_TIME_EXPANSION_RESERVE_CHARS,
 } from '../../shared/context-cache.js';
 
+import { MARKETPLACE_NAME } from '../../shared/marketplace.js';
+
 const VERSION_MARKER_PATH = path.join(
   homedir(),
   '.claude',
   'plugins',
   'marketplaces',
-  'thedotmack',
+  MARKETPLACE_NAME,
   'plugin',
   '.install-version'
 );

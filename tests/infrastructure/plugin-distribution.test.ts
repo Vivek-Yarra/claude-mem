@@ -731,8 +731,8 @@ const MCP_EXPECTED = buildShellCommand({
   mcpExtraCandidates: ['$PWD/plugin', '$PWD'],
   mcpExtraCacheRoots: [
     '$HOME/.codex/plugins/cache/claude-mem-local/claude-mem',
-    '$HOME/.codex/plugins/cache/thedotmack/claude-mem',
   ],
+  mcpExtraMarketplaceCacheBases: ['$HOME/.codex/plugins/cache'],
 });
 
 function hookEntryByPath(parsed: any, dottedPath: string): any | null {

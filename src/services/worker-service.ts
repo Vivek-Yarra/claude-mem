@@ -39,6 +39,7 @@ import { isWorkerAutostartDisabled } from '../shared/worker-autostart.js';
 
 export { isPluginDisabledInClaudeSettings } from '../shared/plugin-state.js';
 import { isPluginDisabledInClaudeSettings } from '../shared/plugin-state.js';
+import { PLUGIN_SETTINGS_KEY } from '../shared/marketplace.js';
 import { resolveRuntimeContext } from './hooks/runtime-selector.js';
 
 declare const __DEFAULT_PACKAGE_VERSION__: string;
@@ -1474,7 +1475,7 @@ async function main() {
     // exit(0) and no trace — indistinguishable from a crash, and only
     // discoverable by reverse-engineering the bundle. One INFO line turns
     // "memory mysteriously stopped" into an obvious cause.
-    logger.info('SYSTEM', 'Worker not starting: claude-mem is disabled in Claude settings (enabledPlugins["claude-mem@thedotmack"] === false). Re-enable the plugin to resume memory capture.', {
+    logger.info('SYSTEM', `Worker not starting: claude-mem is disabled in Claude settings (enabledPlugins["${PLUGIN_SETTINGS_KEY}"] === false). Re-enable the plugin to resume memory capture.`, {
       command: command ?? '(none)',
       configDir: process.env.CLAUDE_CONFIG_DIR || '~/.claude',
     });

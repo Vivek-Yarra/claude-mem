@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { isConnectionRefusedError } from '../shared/connection-errors.js';
 import { expandHome } from '../shared/expand-home.js';
+import { MARKETPLACE_NAME } from '../shared/marketplace.js';
 
 const TIMEOUT_MS = 5_000;
 
@@ -32,7 +33,7 @@ let starting: Promise<void> | undefined;
 /** Only start code from the installed marketplace, never the current repository. */
 export function startHarnessWorker(): Promise<void> {
   if (starting) return starting;
-  const root = join(process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude'), 'plugins', 'marketplaces', 'thedotmack');
+  const root = join(process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude'), 'plugins', 'marketplaces', MARKETPLACE_NAME);
   const runner = join(root, 'plugin', 'scripts', 'bun-runner.js');
   const worker = join(root, 'plugin', 'scripts', 'worker-service.cjs');
   if (!existsSync(runner) || !existsSync(worker)) {

@@ -1,5 +1,5 @@
 
-import { relative, isAbsolute, join, normalize } from 'path';
+import { relative, isAbsolute, join, normalize, dirname } from 'path';
 import { isProjectExcluded } from '../utils/project-filter.js';
 import { loadFromFileOnce } from './hook-settings.js';
 import {
@@ -8,20 +8,19 @@ import {
   OBSERVER_SESSIONS_DIR,
   OBSERVER_SESSIONS_PROJECT,
 } from './paths.js';
+import { ALL_MARKETPLACE_NAMES, PLUGIN_NAME } from './marketplace.js';
 
 const PLUGINS_DIR_NAME = 'plugins';
 const PLUGIN_CACHE_DIR_NAME = 'cache';
-const CLAUDE_MEM_PLUGIN_OWNER = 'thedotmack';
-const CLAUDE_MEM_PLUGIN_NAME = 'claude-mem';
 const PLUGIN_RUNTIME_DIR_NAME = 'plugin';
-const PLUGIN_CACHE_ROOT = join(
-  CLAUDE_CONFIG_DIR,
-  PLUGINS_DIR_NAME,
-  PLUGIN_CACHE_DIR_NAME,
-  CLAUDE_MEM_PLUGIN_OWNER,
-  CLAUDE_MEM_PLUGIN_NAME,
+// Plugin install dirs under every marketplace name (current and legacy): work
+// done inside them is the plugin itself, never a user project.
+const PLUGIN_CACHE_ROOTS = ALL_MARKETPLACE_NAMES.map(name =>
+  join(CLAUDE_CONFIG_DIR, PLUGINS_DIR_NAME, PLUGIN_CACHE_DIR_NAME, name, PLUGIN_NAME),
 );
-const PLUGIN_MARKETPLACE_PLUGIN_ROOT = join(MARKETPLACE_ROOT, PLUGIN_RUNTIME_DIR_NAME);
+const PLUGIN_MARKETPLACE_PLUGIN_ROOTS = ALL_MARKETPLACE_NAMES.map(name =>
+  join(dirname(MARKETPLACE_ROOT), name, PLUGIN_RUNTIME_DIR_NAME),
+);
 
 function isWithin(child: string, parent: string): boolean {
   const normChild = normalize(child);
@@ -37,7 +36,7 @@ export function shouldTrackProject(cwd: string): boolean {
   if (isWithin(cwd, OBSERVER_SESSIONS_DIR)) {
     return false;
   }
-  if (isWithin(cwd, PLUGIN_CACHE_ROOT) || isWithin(cwd, PLUGIN_MARKETPLACE_PLUGIN_ROOT)) {
+  if (PLUGIN_CACHE_ROOTS.some(root => isWithin(cwd, root)) || PLUGIN_MARKETPLACE_PLUGIN_ROOTS.some(root => isWithin(cwd, root))) {
     return false;
   }
   const settings = loadFromFileOnce();

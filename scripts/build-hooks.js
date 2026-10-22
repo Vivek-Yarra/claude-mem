@@ -244,8 +244,10 @@ export function shellTemplateManifest(buildShellCommand, buildCodexWindowsComman
         mcpExtraCandidates: ['$PWD/plugin', '$PWD'],
         mcpExtraCacheRoots: [
           '$HOME/.codex/plugins/cache/claude-mem-local/claude-mem',
-          '$HOME/.codex/plugins/cache/thedotmack/claude-mem',
         ],
+        // Codex caches of the Claude marketplace, expanded per marketplace name
+        // (current name first, then each legacy name) by the template.
+        mcpExtraMarketplaceCacheBases: ['$HOME/.codex/plugins/cache'],
       }),
     },
   };
@@ -1103,7 +1105,9 @@ async function buildHooks() {
     if (!mcpSearchCommand.includes('.codex/plugins/cache/claude-mem-local/claude-mem')) {
       throw new Error('plugin/.mcp.json mcp-search launcher must include Codex cache fallback for hosts that do not inject PLUGIN_ROOT');
     }
-    if (!mcpSearchCommand.includes('plugins/cache/thedotmack/claude-mem')) {
+    // The launcher's Claude cache fallback must use the marketplace name Claude Code installs under.
+    const claudeMarketplaceName = JSON.parse(fs.readFileSync('.claude-plugin/marketplace.json', 'utf-8')).name;
+    if (!mcpSearchCommand.includes(`plugins/cache/${claudeMarketplaceName}/claude-mem`)) {
       throw new Error('plugin/.mcp.json mcp-search launcher must include Claude cache fallback for hosts that do not inject PLUGIN_ROOT');
     }
     console.log('✓ All required distribution files present');

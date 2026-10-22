@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, afterAll, mock } from 'bun:test';
 import { CLAUDE_CONFIG_DIR, MARKETPLACE_ROOT, OBSERVER_SESSIONS_DIR } from '../../src/shared/paths.js';
+import { LEGACY_MARKETPLACE_NAMES, MARKETPLACE_NAME } from '../../src/shared/marketplace.js';
 import { join, normalize } from 'path';
 
 // Snapshot the real module BEFORE mock.module mutates the live namespace, then
@@ -23,7 +24,6 @@ const { shouldTrackProject } = await import('../../src/shared/should-track-proje
 
 const PLUGINS_DIR_NAME = 'plugins';
 const PLUGIN_CACHE_DIR_NAME = 'cache';
-const CLAUDE_MEM_PLUGIN_OWNER = 'thedotmack';
 const CLAUDE_MEM_PLUGIN_NAME = 'claude-mem';
 const PLUGIN_VERSION_DIR_NAME = '13.12.4';
 const PLUGIN_RUNTIME_DIR_NAME = 'plugin';
@@ -60,12 +60,12 @@ describe('shouldTrackProject — path normalization', () => {
     expect(shouldTrackProject(OBSERVER_SESSIONS_DIR)).toBe(false);
   });
 
-  it('returns false when cwd is inside the installed plugin cache', () => {
+  it.each([MARKETPLACE_NAME, ...LEGACY_MARKETPLACE_NAMES])('returns false when cwd is inside the installed plugin cache (%s)', (marketplaceName) => {
     const pluginVersionDir = join(
       CLAUDE_CONFIG_DIR,
       PLUGINS_DIR_NAME,
       PLUGIN_CACHE_DIR_NAME,
-      CLAUDE_MEM_PLUGIN_OWNER,
+      marketplaceName,
       CLAUDE_MEM_PLUGIN_NAME,
       PLUGIN_VERSION_DIR_NAME,
     );

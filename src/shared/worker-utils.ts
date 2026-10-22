@@ -6,6 +6,7 @@ import { HOOK_TIMEOUTS, defaultSessionInitRequestTimeoutMs, getTimeout, maxSessi
 import { readSseEvents } from "./sse-reader.js";
 import { SettingsDefaultsManager, type SettingsDefaults } from "./SettingsDefaultsManager.js";
 import { MARKETPLACE_ROOT, DATA_DIR, resolveDataDir } from "./paths.js";
+import { LEGACY_MARKETPLACE_NAMES, MARKETPLACE_NAME, PLUGIN_NAME } from "./marketplace.js";
 import { loadFromFileOnce } from "./hook-settings.js";
 import { isWorkerAutostartDisabled } from "./worker-autostart.js";
 import { viewerBaseUrl } from "./viewer-url.js";
@@ -570,8 +571,12 @@ export function compareVersionsDescending(a: string, b: string): number {
   return a < b ? 1 : a > b ? -1 : 0;
 }
 
+function cacheRootFor(marketplaceName: string): string {
+  return path.join(path.dirname(path.dirname(MARKETPLACE_ROOT)), 'cache', marketplaceName, PLUGIN_NAME);
+}
+
 export function cacheWorkerScriptCandidates(
-  cacheRoot: string = path.join(path.dirname(path.dirname(MARKETPLACE_ROOT)), 'cache', 'thedotmack', 'claude-mem')
+  cacheRoot: string = cacheRootFor(MARKETPLACE_NAME)
 ): WorkerScriptCandidate[] {
   try {
     return readdirSync(cacheRoot)
@@ -617,13 +622,23 @@ export interface WorkerScriptSearchRoots {
   cacheRoot: string;
   marketplaceRoot: string;
   cwd: string;
+  /**
+   * Roots of a legacy marketplace name (upstream `thedotmack`). Consulted only
+   * when nothing is installed under the current name, so a stale legacy install
+   * never outranks it regardless of version.
+   */
+  legacy?: Array<{ cacheRoot: string; marketplaceRoot: string }>;
 }
 
 function defaultWorkerScriptSearchRoots(): WorkerScriptSearchRoots {
   return {
-    cacheRoot: path.join(path.dirname(path.dirname(MARKETPLACE_ROOT)), 'cache', 'thedotmack', 'claude-mem'),
+    cacheRoot: cacheRootFor(MARKETPLACE_NAME),
     marketplaceRoot: MARKETPLACE_ROOT,
     cwd: process.cwd(),
+    legacy: LEGACY_MARKETPLACE_NAMES.map(name => ({
+      cacheRoot: cacheRootFor(name),
+      marketplaceRoot: path.join(path.dirname(MARKETPLACE_ROOT), name),
+    })),
   };
 }
 
@@ -653,19 +668,29 @@ export function resolveWorkerScript(
     logger.debug('SYSTEM', 'Ignoring missing CLAUDE_MEM_WORKER_SCRIPT_PATH override', { override });
   }
 
-  const candidates: WorkerScriptCandidate[] = [
-    ...cacheWorkerScriptCandidates(roots.cacheRoot),
+  const rootCandidates = (cacheRoot: string, marketplaceRoot: string): WorkerScriptCandidate[] => [
+    ...cacheWorkerScriptCandidates(cacheRoot),
     {
-      scriptPath: candidateWorkerScriptPath(path.join(roots.marketplaceRoot, 'plugin')),
-      version: readPackageVersion(path.join(roots.marketplaceRoot, 'package.json')),
-    },
-    {
-      scriptPath: path.join(roots.cwd, 'plugin', 'scripts', 'worker-service.cjs'),
-      version: readPackageVersion(path.join(roots.cwd, 'package.json')),
+      scriptPath: candidateWorkerScriptPath(path.join(marketplaceRoot, 'plugin')),
+      version: readPackageVersion(path.join(marketplaceRoot, 'package.json')),
     },
   ];
+  const cwdCandidate: WorkerScriptCandidate = {
+    scriptPath: path.join(roots.cwd, 'plugin', 'scripts', 'worker-service.cjs'),
+    version: readPackageVersion(path.join(roots.cwd, 'package.json')),
+  };
 
-  return selectWorkerScript(candidates);
+  // The cwd checkout competes by version with whichever install set is in use.
+  // Legacy-name installs join the pool only when nothing is installed under the
+  // current name, so they can never outrank it.
+  const currentCandidates = rootCandidates(roots.cacheRoot, roots.marketplaceRoot);
+  const pool = currentCandidates.some(candidate => existsSync(candidate.scriptPath))
+    ? currentCandidates
+    : [
+        ...currentCandidates,
+        ...(roots.legacy ?? []).flatMap(legacy => rootCandidates(legacy.cacheRoot, legacy.marketplaceRoot)),
+      ];
+  return selectWorkerScript([...pool, cwdCandidate]);
 }
 
 /** The plugin root a worker script belongs to: `<root>/scripts/worker-service.cjs`. */

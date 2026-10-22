@@ -8,6 +8,7 @@ import { formatHostForUrl, getWorkerHost, getWorkerPort } from '../../shared/wor
 import { parseJsonWithBom } from '../../shared/atomic-json.js';
 import { DATA_DIR } from '../../shared/paths.js';
 import { getBunAbsolutePath as findBunPath, getWorkerServiceAbsolutePath as findWorkerServicePath } from './install-paths.js';
+import { MARKETPLACE_NAME } from '../../shared/marketplace.js';
 
 interface WindsurfHookEntry {
   command: string;
@@ -170,7 +171,7 @@ export async function installWindsurfHooks(): Promise<number> {
   const workerServicePath = findWorkerServicePath();
   if (!workerServicePath) {
     console.error('Could not find worker-service.cjs');
-    console.error('   Expected at: ~/.claude/plugins/marketplaces/thedotmack/plugin/scripts/worker-service.cjs');
+    console.error(`   Expected at: ~/.claude/plugins/marketplaces/${MARKETPLACE_NAME}/plugin/scripts/worker-service.cjs`);
     return 1;
   }
 

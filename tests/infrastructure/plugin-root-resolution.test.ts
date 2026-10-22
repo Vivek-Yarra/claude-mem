@@ -48,8 +48,8 @@ describe('resolvePluginRoot (shared worker-script oracle)', () => {
   beforeEach(() => {
     base = mkdtempSync(join(tmpdir(), 'claude-mem-plugin-root-'));
     roots = {
-      cacheRoot: join(base, 'cache', 'thedotmack', 'claude-mem'),
-      marketplaceRoot: join(base, 'marketplaces', 'thedotmack'),
+      cacheRoot: join(base, 'cache', 'vivek-claude-mem', 'claude-mem'),
+      marketplaceRoot: join(base, 'marketplaces', 'vivek-claude-mem'),
       cwd: join(base, 'project'),
     };
     delete process.env.CLAUDE_MEM_WORKER_SCRIPT_PATH;
@@ -62,6 +62,20 @@ describe('resolvePluginRoot (shared worker-script oracle)', () => {
     else process.env.CLAUDE_MEM_WORKER_SCRIPT_PATH = savedOverride;
     if (savedPluginRoot === undefined) delete process.env.CLAUDE_PLUGIN_ROOT;
     else process.env.CLAUDE_PLUGIN_ROOT = savedPluginRoot;
+  });
+
+  it('prefers the current marketplace name over a higher-version legacy install, and falls back to legacy', () => {
+    const legacy = {
+      cacheRoot: join(base, 'cache', 'thedotmack', 'claude-mem'),
+      marketplaceRoot: join(base, 'marketplaces', 'thedotmack'),
+    };
+    const withLegacy = { ...roots, legacy: [legacy] };
+    const legacyRoot = writePluginRoot(join(legacy.cacheRoot, '99.0.0'));
+    expect(resolvePluginRoot(withLegacy)?.root).toBe(legacyRoot);
+
+    const currentRoot = writePluginRoot(cacheVersionDir('15.0.1'));
+    expect(resolvePluginRoot(withLegacy)?.root).toBe(currentRoot);
+    expect(resolvePluginRoot({ ...roots })?.root).toBe(currentRoot);
   });
 
   it('returns null when nothing is installed', () => {

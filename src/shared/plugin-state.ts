@@ -5,7 +5,7 @@ import { homedir } from 'os';
 import { logger } from '../utils/logger.js';
 import { parseJsonWithBom } from './atomic-json.js';
 
-const PLUGIN_SETTINGS_KEY = 'claude-mem@thedotmack';
+import { PLUGIN_SETTINGS_KEY } from './marketplace.js';
 
 /**
  * Claude Code's plugin toggle. It is host-local: a Qoder hook (marked by

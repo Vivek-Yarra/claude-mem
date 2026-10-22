@@ -7,6 +7,7 @@ import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 export { ensureDirectoryExists, writeJsonFileAtomic } from '../../shared/atomic-json.js';
 import { resolvePluginRoot } from '../../shared/worker-utils.js';
+import { MARKETPLACE_NAME, PLUGIN_NAME } from '../../shared/marketplace.js';
 
 export const IS_WINDOWS = process.platform === 'win32';
 
@@ -15,7 +16,7 @@ export function claudeConfigDirectory(): string {
 }
 
 export function marketplaceDirectory(): string {
-  return join(claudeConfigDirectory(), 'plugins', 'marketplaces', 'thedotmack');
+  return join(claudeConfigDirectory(), 'plugins', 'marketplaces', MARKETPLACE_NAME);
 }
 
 export function pluginsDirectory(): string {
@@ -35,7 +36,7 @@ export function claudeSettingsPath(): string {
 }
 
 export function pluginCacheRootDirectory(): string {
-  return join(pluginsDirectory(), 'cache', 'thedotmack', 'claude-mem');
+  return join(pluginsDirectory(), 'cache', MARKETPLACE_NAME, PLUGIN_NAME);
 }
 
 export function pluginCacheDirectory(version: string): string {

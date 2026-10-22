@@ -40,7 +40,7 @@ describe('isPluginDisabledInClaudeSettings (#781)', () => {
   it('should return false when plugin is explicitly enabled', () => {
     const settings = {
       enabledPlugins: {
-        'claude-mem@thedotmack': true
+        'claude-mem@vivek-claude-mem': true
       }
     };
     writeFileSync(join(tempDir, 'settings.json'), JSON.stringify(settings));
@@ -50,15 +50,24 @@ describe('isPluginDisabledInClaudeSettings (#781)', () => {
   it('should return true when plugin is explicitly disabled', () => {
     const settings = {
       enabledPlugins: {
-        'claude-mem@thedotmack': false
+        'claude-mem@vivek-claude-mem': false
       }
     };
     writeFileSync(join(tempDir, 'settings.json'), JSON.stringify(settings));
     expect(isPluginDisabledInClaudeSettings()).toBe(true);
   });
 
-  it('ignores the Claude Code toggle for a Qoder hook', () => {
+  it('does not let a legacy thedotmack disable flag disable the vivek-claude-mem install', () => {
+    writeFileSync(join(tempDir, 'settings.json'), JSON.stringify({
+      enabledPlugins: { 'claude-mem@thedotmack': false, 'claude-mem@vivek-claude-mem': true },
+    }));
+    expect(isPluginDisabledInClaudeSettings()).toBe(false);
     writeFileSync(join(tempDir, 'settings.json'), JSON.stringify({ enabledPlugins: { 'claude-mem@thedotmack': false } }));
+    expect(isPluginDisabledInClaudeSettings()).toBe(false);
+  });
+
+  it('ignores the Claude Code toggle for a Qoder hook', () => {
+    writeFileSync(join(tempDir, 'settings.json'), JSON.stringify({ enabledPlugins: { 'claude-mem@vivek-claude-mem': false } }));
     process.env.CLAUDE_MEM_QODER_HOOK = '1';
     expect(isPluginDisabledInClaudeSettings()).toBe(false);
   });

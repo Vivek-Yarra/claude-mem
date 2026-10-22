@@ -12,6 +12,7 @@ import {
 } from 'fs';
 import { logger } from '../../utils/logger.js';
 import { getWorkerPort } from '../../shared/worker-utils.js';
+import { MARKETPLACE_NAME } from '../../shared/marketplace.js';
 
 export function getOpenClawConfigDirectory(): string {
   return path.join(homedir(), '.openclaw');
@@ -32,7 +33,7 @@ export function getOpenClawConfigFilePath(): string {
 const OPENCLAW_MARKETPLACE_ROOTS = [
   path.join(
     process.env.CLAUDE_CONFIG_DIR || path.join(homedir(), '.claude'),
-    'plugins', 'marketplaces', 'thedotmack',
+    'plugins', 'marketplaces', MARKETPLACE_NAME,
   ),
   process.cwd(),
 ];

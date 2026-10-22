@@ -11,6 +11,7 @@ import {
 } from '../../shared/worker-utils.js';
 import { readOwnedWorkerPidInfo } from '../../supervisor/process-registry.js';
 import { readJsonSafe } from '../../utils/json-utils.js';
+import { PLUGIN_SETTINGS_KEY } from '../../shared/marketplace.js';
 
 /**
  * Versions of the plugin cache to keep: the newly installed one (N) and the
@@ -240,7 +241,7 @@ export async function probeLiveWorker(): Promise<LiveWorkerProbe> {
  */
 export function readRegisteredCacheVersions(registryPath: string = installedPluginsPath()): string[] {
   const registry = readJsonSafe<{ plugins?: Record<string, unknown> } | null>(registryPath, {});
-  const entries = registry?.plugins?.['claude-mem@thedotmack'];
+  const entries = registry?.plugins?.[PLUGIN_SETTINGS_KEY];
   if (!Array.isArray(entries)) return [];
   return entries
     .map(entry => (entry as { installPath?: unknown } | null)?.installPath)

@@ -123,7 +123,9 @@ function isPluginDisabledInClaudeSettings() {
     return Boolean(
       settings &&
       settings.enabledPlugins &&
-      settings.enabledPlugins['claude-mem@thedotmack'] === false
+      // Keep in sync with PLUGIN_SETTINGS_KEY in src/shared/marketplace.ts. A
+      // legacy `claude-mem@thedotmack` flag must not disable this install.
+      settings.enabledPlugins['claude-mem@vivek-claude-mem'] === false
     );
   } catch {
     return false;

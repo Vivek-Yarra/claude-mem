@@ -5,7 +5,9 @@ const { existsSync } = require('fs');
 const path = require('path');
 const os = require('os');
 
-const INSTALLED_PATH = path.join(os.homedir(), '.claude', 'plugins', 'marketplaces', 'thedotmack');
+// Keep in sync with MARKETPLACE_NAME in src/shared/marketplace.ts (tests/shared/marketplace.test.ts checks).
+const MARKETPLACE_NAME = 'vivek-claude-mem';
+const INSTALLED_PATH = path.join(os.homedir(), '.claude', 'plugins', 'marketplaces', MARKETPLACE_NAME);
 
 if (!existsSync(INSTALLED_PATH)) {
   console.error('\x1b[31m%s\x1b[0m', `Marketplace not found at ${INSTALLED_PATH} - run npm run sync-marketplace first`);

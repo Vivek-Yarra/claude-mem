@@ -8,6 +8,7 @@ import { buildSpawnSyncInvocation, lookupWindowsCommand } from '../../shared/spa
 import { logger } from '../../utils/logger.js';
 import { CONTEXT_TAG_OPEN, findContextBlockRange } from '../../utils/context-injection.js';
 import { getMcpServerAbsolutePath, getNodeAbsolutePath } from './install-paths.js';
+import { MARKETPLACE_NAME } from '../../shared/marketplace.js';
 
 const OPENCODE_PLUGIN_CONFIG_PATH = './plugins/claude-mem.js';
 const OPENCODE_MCP_SERVER_KEY = 'claude-mem';
@@ -299,7 +300,7 @@ export function findBuiltPluginPath(): string | null {
   const possiblePaths = [
     path.join(
       process.env.CLAUDE_CONFIG_DIR || path.join(homedir(), '.claude'),
-      'plugins', 'marketplaces', 'thedotmack',
+      'plugins', 'marketplaces', MARKETPLACE_NAME,
       'dist', 'opencode-plugin', 'index.js',
     ),
     path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'dist', 'opencode-plugin', 'index.js'),

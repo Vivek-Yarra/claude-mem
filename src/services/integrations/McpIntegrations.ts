@@ -7,6 +7,7 @@ import { getMcpServerAbsolutePath, getNodeAbsolutePath } from './install-paths.j
 import { readJsonSafe } from '../../utils/json-utils.js';
 import { stripUtf8Bom } from '../../shared/atomic-json.js';
 import { injectContextIntoMarkdownFile } from '../../utils/context-injection.js';
+import { MARKETPLACE_NAME } from '../../shared/marketplace.js';
 
 export const PLACEHOLDER_CONTEXT = `# claude-mem: Cross-Session Memory
 
@@ -55,7 +56,7 @@ function installMcpIntegration(config: McpInstallerConfig): () => Promise<number
     const mcpServerPath = getMcpServerAbsolutePath();
     if (!mcpServerPath) {
       console.error('Could not find MCP server script');
-      console.error('   Expected at: ~/.claude/plugins/marketplaces/thedotmack/plugin/scripts/mcp-server.cjs');
+      console.error(`   Expected at: ~/.claude/plugins/marketplaces/${MARKETPLACE_NAME}/plugin/scripts/mcp-server.cjs`);
       return 1;
     }
 
@@ -250,7 +251,7 @@ export async function installGooseMcpIntegration(): Promise<number> {
   const mcpServerPath = getMcpServerAbsolutePath();
   if (!mcpServerPath) {
     console.error('Could not find MCP server script');
-    console.error('   Expected at: ~/.claude/plugins/marketplaces/thedotmack/plugin/scripts/mcp-server.cjs');
+    console.error(`   Expected at: ~/.claude/plugins/marketplaces/${MARKETPLACE_NAME}/plugin/scripts/mcp-server.cjs`);
     return 1;
   }
 

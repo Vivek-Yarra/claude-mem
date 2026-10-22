@@ -22,8 +22,17 @@
  *   1. ${CLAUDE_PLUGIN_ROOT:-${PLUGIN_ROOT:-}}   (host-injected env)
  *   2. (mcp only) $PWD/plugin, $PWD               (repo/dev checkout)
  *   3. cache directories (highest version first, .orphaned_at dirs skipped)
- *   4. $_C/plugins/marketplaces/thedotmack/plugin (marketplace install)
+ *   4. $_C/plugins/marketplaces/<marketplace>/plugin (marketplace install)
+ *
+ * <marketplace> is the current marketplace name (src/shared/marketplace.ts).
+ * Steps 3 and 4 run for the current name first, then repeat for each legacy
+ * name, so a stale legacy install can never outrank the current one.
  */
+
+import { LEGACY_MARKETPLACE_NAMES, MARKETPLACE_NAME } from '../shared/marketplace.js';
+
+// build-hooks.js builds the host-specific extra cache roots from these.
+export { ALL_MARKETPLACE_NAMES, LEGACY_MARKETPLACE_NAMES, MARKETPLACE_NAME } from '../shared/marketplace.js';
 
 export type ShellTemplateHost = 'claude-code-setup' | 'codex-cli' | 'mcp';
 
@@ -68,6 +77,13 @@ export interface ShellTemplateOptions {
    * uniformly. Ignored for non-mcp hosts.
    */
   mcpExtraCacheRoots?: string[];
+  /**
+   * MCP-only: directories that hold `<marketplace>/claude-mem/<version>` caches
+   * of other hosts (e.g. `$HOME/.codex/plugins/cache`). Expanded once per
+   * marketplace name: the current name joins the first cache group, each legacy
+   * name joins that name's group, so legacy caches stay behind the current one.
+   */
+  mcpExtraMarketplaceCacheBases?: string[];
 }
 
 // Prepend common tool locations without spawning a login shell on every hook
@@ -139,9 +155,8 @@ function candidateBlock(options: ShellTemplateOptions): string {
   }
 
   const extraCacheRoots = isMcp && options.mcpExtraCacheRoots ? options.mcpExtraCacheRoots : [];
-  const allGlobs = [...extraCacheRoots, '$_C/plugins/cache/thedotmack/claude-mem']
-    .map((root) => `"${root}"/[0-9]*/`)
-    .join(' ');
+  const marketplaceBases = isMcp && options.mcpExtraMarketplaceCacheBases ? options.mcpExtraMarketplaceCacheBases : [];
+  const basesFor = (name: string): string[] => marketplaceBases.map((base) => `${base}/${name}/claude-mem`);
   // Cache dirs ranked by VERSION descending (zero-padded major.minor.patch
   // key, release ahead of prerelease at the same base), skipping dirs Claude
   // Code stamped with .orphaned_at. Mirrors compareVersionsDescending in
@@ -149,21 +164,38 @@ function candidateBlock(options: ShellTemplateOptions): string {
   // identically (by version, never mtime) is the restart-storm invariant.
   // (The former `ls -dt` mtime order let an orphan stamp on the OLD version
   // dir make it "newest": the 2026-07-22 restart storm.)
-  lines.push(
-    `for _V in ${allGlobs}; do ` +
-    `[ -d "$_V" ] || continue; [ -e "\${_V}.orphaned_at" ] && continue; ` +
-    `_B=\${_V%/}; _B=\${_B##*/}; ` +
-    // Balanced (pattern) case form: an unmatched `)` inside the enclosing
-    // $(...) command substitution is a POSIX parser error.
-    `case "$_B" in (*-*) _G=0;; (*) _G=1;; esac; ` +
-    `_N=\${_B%%-*}; _M1=\${_N%%.*}; ` +
-    `case "$_N" in (*.*) _T=\${_N#*.};; (*) _T=0;; esac; _M2=\${_T%%.*}; ` +
-    `case "$_T" in (*.*) _U=\${_T#*.};; (*) _U=0;; esac; _M3=\${_U%%.*}; ` +
-    `_M1=\${_M1%%[!0-9]*}; _M2=\${_M2%%[!0-9]*}; _M3=\${_M3%%[!0-9]*}; ` +
-    `printf '%08d%08d%08d%d %s\\n' "\${_M1:-0}" "\${_M2:-0}" "\${_M3:-0}" "$_G" "$_V"; ` +
-    `done 2>/dev/null | sort -r | sed 's/^[^ ]* //';`
-  );
-  lines.push(`printf '%s\\n' "$_C/plugins/marketplaces/thedotmack/plugin";`);
+  // Each marketplace name is ranked on its own, so a legacy-name cache with a
+  // higher version still sorts behind the current name's.
+  const sortedCacheLoop = (roots: string[]): string => {
+    const allGlobs = roots.map((root) => `"${root}"/[0-9]*/`).join(' ');
+    return (
+      `for _V in ${allGlobs}; do ` +
+      `[ -d "$_V" ] || continue; [ -e "\${_V}.orphaned_at" ] && continue; ` +
+      `_B=\${_V%/}; _B=\${_B##*/}; ` +
+      // Balanced (pattern) case form: an unmatched `)` inside the enclosing
+      // $(...) command substitution is a POSIX parser error.
+      `case "$_B" in (*-*) _G=0;; (*) _G=1;; esac; ` +
+      `_N=\${_B%%-*}; _M1=\${_N%%.*}; ` +
+      `case "$_N" in (*.*) _T=\${_N#*.};; (*) _T=0;; esac; _M2=\${_T%%.*}; ` +
+      `case "$_T" in (*.*) _U=\${_T#*.};; (*) _U=0;; esac; _M3=\${_U%%.*}; ` +
+      `_M1=\${_M1%%[!0-9]*}; _M2=\${_M2%%[!0-9]*}; _M3=\${_M3%%[!0-9]*}; ` +
+      `printf '%08d%08d%08d%d %s\\n' "\${_M1:-0}" "\${_M2:-0}" "\${_M3:-0}" "$_G" "$_V"; ` +
+      `done 2>/dev/null | sort -r | sed 's/^[^ ]* //';`
+    );
+  };
+  lines.push(sortedCacheLoop([
+    ...extraCacheRoots,
+    ...basesFor(MARKETPLACE_NAME),
+    `$_C/plugins/cache/${MARKETPLACE_NAME}/claude-mem`,
+  ]));
+  lines.push(`printf '%s\\n' "$_C/plugins/marketplaces/${MARKETPLACE_NAME}/plugin";`);
+  LEGACY_MARKETPLACE_NAMES.forEach((legacyName) => {
+    lines.push(sortedCacheLoop([
+      ...basesFor(legacyName),
+      `$_C/plugins/cache/${legacyName}/claude-mem`,
+    ]));
+    lines.push(`printf '%s\\n' "$_C/plugins/marketplaces/${legacyName}/plugin";`);
+  });
 
   // The MCP loop trims a trailing slash inline; the hook loop trims via _R="${_R%/}".
   const trimAssignment = isMcp ? '' : ' _R="${_R%/}";';
@@ -237,19 +269,22 @@ function shTokenToNode(token: string): string {
  */
 function buildMcpNodeLauncher(options: ShellTemplateOptions): string {
   const candidates = (options.mcpExtraCandidates ?? []).map(shTokenToNode);
-  const cacheRoots = [
-    ...(options.mcpExtraCacheRoots ?? []),
-    '$_C/plugins/cache/thedotmack/claude-mem',
-  ].map(shTokenToNode);
-  const marketplace = shTokenToNode('$_C/plugins/marketplaces/thedotmack/plugin');
+  const bases = options.mcpExtraMarketplaceCacheBases ?? [];
+  const cacheRootsFor = (extras: string[], name: string): string[] =>
+    [...extras, ...bases.map((base) => `${base}/${name}/claude-mem`), `$_C/plugins/cache/${name}/claude-mem`].map(shTokenToNode);
+  const marketplaceFor = (name: string): string => shTokenToNode(`$_C/plugins/marketplaces/${name}/plugin`);
   const require = JSON.stringify(options.requireFile);
   const notFound = JSON.stringify(`${options.notFoundMessage}\n`);
 
   const kParts = [
     'E',
     ...candidates,
-    ...cacheRoots.map((root) => `...L(${root})`),
-    marketplace,
+    ...cacheRootsFor(options.mcpExtraCacheRoots ?? [], MARKETPLACE_NAME).map((root) => `...L(${root})`),
+    marketplaceFor(MARKETPLACE_NAME),
+    ...LEGACY_MARKETPLACE_NAMES.flatMap((name) => [
+      ...cacheRootsFor([], name).map((root) => `...L(${root})`),
+      marketplaceFor(name),
+    ]),
   ].join(',');
 
   return (
@@ -322,15 +357,23 @@ export function buildCodexWindowsCommand(
     "const roots=[];",
     "for(const v of [process.env.CLAUDE_PLUGIN_ROOT,process.env.PLUGIN_ROOT])if(v)roots.push(v);",
     ...hostRootCount,
-    "const cache=p.join(C,'plugins','cache','thedotmack','claude-mem');",
+    `const cache=p.join(C,'plugins','cache',${jsSingleQuoted(MARKETPLACE_NAME)},'claude-mem');`,
     // S/W mirror compareVersionsDescending in src/shared/worker-utils.ts and
     // the filter skips .orphaned_at-stamped cache dirs, same as
     // cacheWorkerScriptCandidates — every resolver ranking candidates
     // identically (by version, never mtime) is the restart-storm invariant.
     "const S=n=>{const q=n.split('-')[0].split('.');return[parseInt(q[0],10)||0,parseInt(q[1],10)||0,parseInt(q[2],10)||0]};",
     "const W=(a,b)=>{const x=S(a),y=S(b);return(y[0]-x[0])||(y[1]-x[1])||(y[2]-x[2])||((a.indexOf('-')<0?0:1)-(b.indexOf('-')<0?0:1))||(a<b?1:a>b?-1:0)};",
-    "try{roots.push(...fs.readdirSync(cache).filter(n=>{const ch=n.charAt(0);return ch>='0'&&ch<='9'}).map(n=>p.join(cache,n)).filter(r=>{try{return fs.statSync(r).isDirectory()&&!fs.existsSync(p.join(r,'.orphaned_at'))}catch{return false}}).sort((a,b)=>W(p.basename(a),p.basename(b))))}catch{}",
-    "roots.push(p.join(C,'plugins','marketplaces','thedotmack','plugin'));",
+    // Single quotes only: this string is embedded in a `node -e "..."` command line.
+    // R_(dir) pushes one cache's version dirs, highest first. The current name's
+    // cache and marketplace dir come first; each legacy name follows.
+    "const R_=cache=>{try{roots.push(...fs.readdirSync(cache).filter(n=>{const ch=n.charAt(0);return ch>='0'&&ch<='9'}).map(n=>p.join(cache,n)).filter(r=>{try{return fs.statSync(r).isDirectory()&&!fs.existsSync(p.join(r,'.orphaned_at'))}catch{return false}}).sort((a,b)=>W(p.basename(a),p.basename(b))))}catch{}};",
+    "R_(cache);",
+    `roots.push(p.join(C,'plugins','marketplaces',${jsSingleQuoted(MARKETPLACE_NAME)},'plugin'));`,
+    ...LEGACY_MARKETPLACE_NAMES.flatMap((name) => [
+      `R_(p.join(C,'plugins','cache',${jsSingleQuoted(name)},'claude-mem'));`,
+      `roots.push(p.join(C,'plugins','marketplaces',${jsSingleQuoted(name)},'plugin'));`,
+    ]),
     "let R=null;",
     rootLoop,
     "if(!R){process.stderr.write('claude-mem: plugin scripts not found\\n');process.exit(1)}",

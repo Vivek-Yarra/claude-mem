@@ -12,6 +12,7 @@
 
 import { TREE_SITTER_CLI_CANNOT_RUN } from '../../services/smart-file-read/tree-sitter-cli-provision.js';
 import { TREE_SITTER_CLI_PATH_WORKAROUND } from '../../services/smart-file-read/tree-sitter-bin-path.js';
+import { MARKETPLACE_NAME } from '../../shared/marketplace.js';
 
 export enum ErrorSeverity {
   /** exit 1, do not continue. */
@@ -146,7 +147,7 @@ export const ERROR_CATEGORIES: ErrorCategory[] = [
       ctx.component === 'plugin-json' &&
       /Unexpected token|JSON|parse/i.test(causeMessage(cause)),
     remediation: () =>
-      'Existing plugin.json is corrupt. Run `rm -rf ~/.claude/plugins/marketplaces/thedotmack` and re-run `npx claude-mem install`.',
+      'Existing plugin.json is corrupt. Run `rm -rf ~/.claude/plugins/marketplaces/' + MARKETPLACE_NAME + '` and re-run `npx claude-mem install`.',
   },
   {
     id: 'all-ides-failed',

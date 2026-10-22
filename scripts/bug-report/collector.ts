@@ -3,6 +3,7 @@ import * as path from "path";
 import { exec } from "child_process";
 import { promisify } from "util";
 import * as os from "os";
+import { MARKETPLACE_NAME } from "../../src/shared/marketplace.js";
 import { SettingsDefaultsManager } from "../../src/shared/SettingsDefaultsManager.js";
 import { DATA_DIR, USER_SETTINGS_PATH } from "../../src/shared/paths.js";
 import { formatHostForUrl } from "../../src/shared/worker-url.js";
@@ -216,7 +217,7 @@ export async function collectDiagnostics(
     ".claude",
     "plugins",
     "marketplaces",
-    "thedotmack"
+    MARKETPLACE_NAME
   );
   const cwd = process.cwd();
   const isDevMode = cwd.includes("claude-mem") && !cwd.includes(".claude");
