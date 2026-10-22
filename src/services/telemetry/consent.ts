@@ -40,7 +40,7 @@ export type TelemetryConsentExplanation = {
  * 1. DO_NOT_TRACK set (truthy) -> always off
  * 2. CLAUDE_MEM_TELEMETRY env: '0'/'false'/'off' -> off, '1'/'true'/'on' -> on
  * 3. telemetry.json config: enabled === true -> on, enabled === false -> off
- * 4. Default: on (opt-out — anonymous events only; see docs.claude-mem.ai/telemetry)
+ * 4. Default: OFF (local patch: opt-in; set CLAUDE_MEM_TELEMETRY=1 or telemetry.json enabled:true to enable)
  */
 export function explainTelemetryConsent(
   env: NodeJS.ProcessEnv,
@@ -59,7 +59,7 @@ export function explainTelemetryConsent(
   if (config?.enabled === true) return { enabled: true, source: 'config' };
   if (config?.enabled === false) return { enabled: false, source: 'config' };
 
-  return { enabled: true, source: 'default' };
+  return { enabled: false, source: 'default' };
 }
 
 /**
