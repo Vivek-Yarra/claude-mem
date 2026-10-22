@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
-import { chmodSync, copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, utimesSync, writeFileSync } from 'fs';
+import { chmodSync, copyFileSync, existsSync, linkSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, utimesSync, writeFileSync } from 'fs';
 import { spawnSync } from 'child_process';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -870,6 +870,21 @@ describe.skipIf(!isPosixHost)('plugin/scripts/ensure-launcher.cjs under plain no
     const scriptRun = runEnsureLauncherScript(scratchHome, {
       CLAUDE_PLUGIN_ROOT: ensureLauncherPluginRoot(),
       PATH: `${symlinkedBinDirectory}:${binDirectory}:/usr/bin:/bin`,
+    });
+    expect(scriptRun.status).toBe(0);
+    expect(scriptRun.stdout).toBe('');
+  });
+
+  it('exits 0 silently when an earlier PATH entry holds a hard link to the launcher', () => {
+    const scratchHome = makeScratchHome();
+    const binDirectory = path.join(scratchHome, '.local', 'bin');
+    writeFakeLauncher(path.join(binDirectory, 'claude-mem'), String(LAUNCHER_PROTOCOL));
+    const linkDirectory = path.join(scratchHome, 'older-path-bin');
+    mkdirSync(linkDirectory, { recursive: true });
+    linkSync(path.join(binDirectory, 'claude-mem'), path.join(linkDirectory, 'claude-mem'));
+    const scriptRun = runEnsureLauncherScript(scratchHome, {
+      CLAUDE_PLUGIN_ROOT: ensureLauncherPluginRoot(),
+      PATH: `${linkDirectory}:${binDirectory}:/usr/bin:/bin`,
     });
     expect(scriptRun.status).toBe(0);
     expect(scriptRun.stdout).toBe('');

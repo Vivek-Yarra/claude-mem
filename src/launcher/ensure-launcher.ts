@@ -30,7 +30,7 @@
  * - Runs under plain `node`, so it imports only the light launcher modules and
  *   the installer's Bun discovery (tool-path.ts), never the worker.
  */
-import { existsSync, readFileSync, realpathSync, writeSync } from 'fs';
+import { existsSync, readFileSync, realpathSync, statSync, writeSync } from 'fs';
 import { dirname, join } from 'path';
 import {
   ensureLauncherOnPath,
@@ -72,9 +72,15 @@ const stderrLogger: LauncherInstallLogger = {
 function isSameFileOnDisk(firstPath: string, secondPath: string): boolean {
   const firstRealPath = realpathSync(firstPath);
   const secondRealPath = realpathSync(secondPath);
-  return process.platform === 'win32'
+  const samePath = process.platform === 'win32'
     ? firstRealPath.toLowerCase() === secondRealPath.toLowerCase()
     : firstRealPath === secondRealPath;
+  if (samePath) return true;
+  // A hard link to the launcher (e.g. in a directory already on an older PATH) is
+  // the same file under another path; realpath does not resolve hard links.
+  const firstStat = statSync(firstPath, { bigint: true });
+  const secondStat = statSync(secondPath, { bigint: true });
+  return firstStat.ino !== 0n && firstStat.ino === secondStat.ino && firstStat.dev === secondStat.dev;
 }
 
 /** Why `claude-mem` on the hook PATH is not the placed launcher, or null when it is. */
