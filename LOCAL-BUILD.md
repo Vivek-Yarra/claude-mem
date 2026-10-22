@@ -1,6 +1,6 @@
 # claude-mem 15.0.1 pinned local build
 
-Built 2026-10-22 on Windows 11 (Git Bash, node v24.14.0, bun 1.3.9).
+Built 2026-10-22 on Windows 11 (Git Bash, node v24.14.0, bun 1.3.9). `pinned-next` (below) was rebuilt the same day with bun 1.4.3.
 
 - Upstream: https://github.com/thedotmack/claude-mem.git (remote `upstream`)
 - Fork (distribution target): https://github.com/Vivek-Yarra/claude-mem.git (remote `fork`, not pushed yet)
@@ -23,6 +23,53 @@ Built 2026-10-22 on Windows 11 (Git Bash, node v24.14.0, bun 1.3.9).
 6. `local: rebuild plugin artifacts for v15.0.1 + local patches` (last commit) - regenerated `plugin/scripts/*.cjs(.map)` via `npm run build`. Marketplace installs from git need no build.
 
 Not changed: the Windows-only `thedotmack` strings in `mcp-server.ts` (a log-only marketplace-marker warning), `prune-cache.ts` and the npx installer.
+
+## pinned-next (next version, branch `pinned-next` on top of `pinned` f830cccf8; not pushed)
+
+Marketplace name `vivek-claude-mem` again, this time through one constant instead of a one-file patch. Supersedes patch 5 and the "keep thedotmack" revert (21a2cd990). One commit each, prefix `local:`, oldest first:
+
+1. `marketplace name vivek-claude-mem via one constant (legacy thedotmack fallback)` - `src/shared/marketplace.ts` exports `MARKETPLACE_NAME='vivek-claude-mem'`, `LEGACY_MARKETPLACE_NAMES=['thedotmack']`, `PLUGIN_SETTINGS_KEY`. Used by `paths.ts` (MARKETPLACE_ROOT), `plugin-state.ts`, `worker-utils.ts`, the launcher, `mcp-server.ts`, `harness-worker.ts`, `hook-shell-template.ts` (+ regenerated `hooks.json`, `codex-hooks.json`, `.mcp.json`), npx-cli install/uninstall/paths/prune-cache, the integration installers, `should-track-project.ts` (plugin cache/marketplace dirs, both names), dev scripts, and the hand-written `plugin/scripts/bun-runner.js` (literal key, guarded by `tests/shared/marketplace.test.ts`). `.claude-plugin/marketplace.json` name is `vivek-claude-mem` (plugin name stays `claude-mem`).
+   - Order everywhere: current cache, current marketplace dir, then each legacy name (cache, marketplace dir). Each cache is version-ranked on its own, so a legacy cache with a higher version never outranks the new one. `worker-utils.resolveWorkerScript` only considers legacy roots when nothing is installed under the new name.
+   - `enabledPlugins`: only `claude-mem@vivek-claude-mem === false` disables; a legacy `claude-mem@thedotmack: false` is ignored. npx uninstall removes both names.
+   - GitHub owner/repo URLs, the stars button and `relayed-text.ts` still point at thedotmack/claude-mem (upstream reference). `npx claude-mem install` still registers the marketplace source repo `thedotmack/claude-mem` (under the new name); use `claude plugin marketplace add Vivek-Yarra/claude-mem` instead.
+   - Not renamed: `cowork/scripts/cmem-hook.mjs` and `openclaw/install.sh` (separate harnesses, still check `thedotmack`), Codex's own `claude-mem-local` marketplace.
+2. `context-read worker gets DB path via workerData; resolveDataDir reads env by computed key` - defensive for Bun bug oven-sh/bun#34210 (the transpiler cache froze a temp `CLAUDE_MEM_DATA_DIR`). `ContextReadWorkerClient` passes `dbPath` in `workerData` (constructor option `{dbPath}` for tests), `context-read-worker.ts` uses it; `resolveDataDir()` reads `process.env[key]`. `ContextBuilder` (render path inside the thread) still uses the module-level `DB_PATH`, which is now derived from the dynamic read.
+3. Upstream PRs, cherry-picked with their original authors (fetched from `refs/pull/N/head`):
+   - `#4974` timeline CTE limit (supermario_leo): `dumb_search` timeline 198-245 ms -> 50-59 ms on the 24k-observation MetaBots project.
+   - `#4971` context cache render order (Rudy Celekli).
+   - `#4952` Chroma writer-lock statSync (keeponlight).
+   - `#4944` `/api/mcp/toggle` cross-origin guard (DeryFerd).
+   - `#4690` recover observations orphaned by a quota-cooldown restart (akushonkamen). The PR is the orphan-recovery scan, not a persisted RAM queue.
+4. `orphan recovery pages past skipped sessions (PR #4690 review P1)` - the 5-session budget was applied in SQL before marker/live/echo-only sessions were excluded, so five such sessions starved every recoverable one. The budget now counts sessions actually re-fed (pages of 50, max 10 pages). New two-round regression test. The review's P2 (a completed batch whose rows were never linked can be re-fed once after its session leaves RAM) is NOT fixed: the cost is at most one extra provider run per session (one-shot marker). On this machine's DB the scan finds exactly 5 sessions / 25 rows (4 ctxprobe/ctxtest probes, 1 interior_design from 2026-10-08), so the first worker start re-feeds those 5 once. Seen in the functional test: when the observer cannot authenticate, the marker is still written and the buffered work is lost on the next restart (design trade-off of the PR).
+5. `fix(shared): reap descendants on the Windows tree-kill path` - from ryanmcafee/claude-mem 038edada (author preserved). v15.0.1's `killProcessTree` on Windows was a bare `taskkill /T /F` that returned success on "already gone" without enumerating descendants, so a root that exits during the walk orphaned its children. It now snapshots descendants first, runs taskkill, reaps the union (PID-reuse checked), and throws taskkill failures only after the reap. +1 test in `tests/shared/kill-process-tree-cross-platform.test.ts`.
+6. `isolate the Bun transpiler cache for test runs` - `npm test*` go through `scripts/bun-test.mjs` (fresh `BUN_RUNTIME_TRANSPILER_CACHE_PATH` per run, removed afterwards). `tests/preload.ts` exits with a message when the variable is unset (override `CLAUDE_MEM_ALLOW_SHARED_BUN_CACHE=1`, set in the CI workflows). A bare `bun test` therefore refuses to run; use `npm test` or set the variable yourself (`0` disables the cache).
+7. `rebuild plugin artifacts` - `bun install` (no changes) + `npm run build` with bun 1.4.3.
+
+### pinned-next test results
+Isolated: scratch HOME/USERPROFILE/CLAUDE_CONFIG_DIR/CLAUDE_MEM_DATA_DIR/port, fresh transpiler cache and package cache per run.
+- 4 groups (shared+launcher+misc / infrastructure / npx-cli+installers+memory+utils / context+worker/http+cli+supervisor+PR tests), 60 s per-test timeout, the same groups run on a `pinned` worktree:
+  - pinned: 3,575 pass / 94 fail. pinned-next: 3,612 pass / 93 fail (+37 new tests). No failing test name on pinned-next that is not also failing on `pinned`; the one `pinned` failure that passes now is an `npm pack` timing test (`npm tarball includes generated runtime entries`, 5 s timeout, flaky under load).
+  - The remaining ~93 failures are pre-existing Windows/environment failures (installer fixtures, `symlinkSync` EPERM, spawn-contract matrix, ChromaMcpManager singleton timeouts, ...). Not triaged individually.
+- The first run caught a real bug in this series: the Codex Windows resolver embedded `"vivek-claude-mem"` with double quotes inside `node -e "..."`. Fixed (single quotes) in patch 1; `tests/infrastructure/hook-early-env-optout.test.ts` covers it.
+- PR tests: #4974 `progressive-memory-search` (+2), #4971 `context-cache-render-order`, #4944 `mcp-toggle-origin-guard`, #4690 `quota-orphan-recovery` (+1 regression) all pass. #4952's test sits in `chroma-mcp-manager-singleton.test.ts`, whose 5 other tests time out identically on `pinned` (Windows); the new test passes.
+- Some suites leave `worker-service.cjs --daemon` processes behind (4 after each sweep). Kill them by repo path, never the live worker under `~/.claude/plugins/cache`.
+
+### pinned-next functional test
+Copy of `backups\pre-15.0.1-local\claude-mem.db` + settings in a scratch data dir, port 37799, Chroma disabled.
+- Observer cannot call a model: scratch HOME and CLAUDE_CONFIG_DIR, no API keys. (Setting `CLAUDE_MEM_PROVIDER=openrouter` with an empty key did not stop the Claude SDK from being used; the Claude CLI answered "Not logged in" and no observation was produced.)
+- Migrations: schema 64 -> 67, no migration errors. Observations 70,612 before and after.
+- `/api/context/inject` 200: laptop_lenovo 9,689 B, MetaBots 6,408 B, byte-identical to `pinned`'s output on the same DB apart from the timestamp. With a failing observer the output also carries a ~600 B "claude-mem can't save memories right now" banner and compacts the full-narrative rows. Cold first call 0.4 to 4 s (context-read worker start), cached 12-18 ms.
+- Search: `/api/search?query=worker port` 200 (1,189 B, ids 28721-28723) -> `POST /api/observations/batch` 200, 3 rows.
+- `POST /api/dumb-search` (timeline) on MetaBots, 5 runs: pinned 198-245 ms; pinned-next 50-59 ms.
+- session-init hook (`claude-mem-launcher.cjs hook claude-code session-init`, 5 runs): 762, 1147, 1167, 1124, 892 ms wall, exit 0, stdout `{}` (the earlier pinned run was 654-982 ms; the machine was not idle either time).
+- Orphan recovery (#4690): first start found 5 candidates and re-fed all 5; each failed with "SDK authentication failed"; marker file written.
+- Rename resolution: scratch CLAUDE_CONFIG_DIR with `plugins/cache/vivek-claude-mem/claude-mem/15.0.1` (copy of the built plugin) and a decoy `plugins/cache/thedotmack/claude-mem/13.35.0`, repeated with a 99.0.0 decoy. `resolveWorkerScript`/`resolvePluginRoot`, the compiled launcher, the `.mcp.json` resolver and the Codex `commandWindows` resolver all pick the vivek-claude-mem tree. The Setup hook searches vivek cache, vivek marketplace, thedotmack cache, thedotmack marketplace in that order. `enabledPlugins {"claude-mem@thedotmack": false, "claude-mem@vivek-claude-mem": true}` keeps the new install enabled (launcher runs, `isPluginDisabledInClaudeSettings()` false); the new key `false` makes the launcher exit 0 silently.
+- After the runs: all test processes stopped, live worker (15.0.1, 127.0.0.1:37782) healthy, `~/.bun/install/cache/@t@` listing unchanged.
+
+### Remaining `thedotmack` strings after rebuild (`grep -rn thedotmack plugin/ src/`)
+- Legacy fallback: `src/shared/marketplace.ts`, `CodexCliInstaller.ts` (legacy plugin id), `T3CodeInstaller.ts` (settings-arg regex), generated resolver strings in `plugin/hooks/*.json` and `plugin/.mcp.json`, and the bundled `LEGACY_MARKETPLACE_NAMES` in every `plugin/scripts/*.cjs` and `plugin/sqlite/*`.
+- GitHub URLs / upstream reference: `thedotmack/claude-mem` links in sources and plugin manifests, `relayed-text.ts`, the `Header.tsx` stars button (`plugin/ui/viewer-bundle.js`).
+- Comments: `worker-utils.ts`, `marketplace.ts`, `bun-runner.js` (legacy key note).
 
 ## Build
 
@@ -60,7 +107,42 @@ On this machine, with the default Bun transpiler cache, the context-read worker 
 ### Not verified
 - Chroma (remote Docker) with v15; the live worker's observer / model calls; behaviour of the `claude-mem.exe` compiled launcher from this build; a real Claude Code session end to end; `claude plugin marketplace add Vivek-Yarra/claude-mem` (fork not pushed).
 
-## Cutover (do not run until the branch is pushed and reviewed)
+## Cutover for pinned-next (marketplace rename; do not run until reviewed)
+
+Current live state: `claude-mem@thedotmack` 15.0.1 from the fork (`pinned`), worker on 127.0.0.1:37782 running from `~/.claude/plugins/cache/thedotmack/claude-mem/15.0.1`.
+
+```
+# 0. Stop the worker and take a fresh DB backup
+claude-mem stop
+mkdir C:\Users\ansiv\.claude-mem\backups\pre-pinned-next
+copy C:\Users\ansiv\.claude-mem\claude-mem.db C:\Users\ansiv\.claude-mem\backups\pre-pinned-next\
+copy C:\Users\ansiv\.claude-mem\settings.json C:\Users\ansiv\.claude-mem\backups\pre-pinned-next\
+
+# 1. Publish the branch as `pinned` (fast-forward: fork/pinned f830cccf8 is an ancestor of pinned-next)
+cd C:\workspace\claude-mem-pinned
+git push fork pinned-next:pinned
+git checkout pinned && git merge --ff-only pinned-next      # keep the local branch in step
+
+# 2. Switch plugin and marketplace
+claude plugin uninstall claude-mem@thedotmack
+claude plugin marketplace remove thedotmack
+claude plugin marketplace add Vivek-Yarra/claude-mem        # marketplace.json name = vivek-claude-mem
+claude plugin install claude-mem@vivek-claude-mem
+
+# 3. Settings keys
+#    C:\workspace\hms\.claude\settings.json: "claude-mem@thedotmack" -> "claude-mem@vivek-claude-mem"
+#    grep -r "claude-mem@thedotmack" C:\workspace\*\.claude   (fix any other project settings)
+#    ~/.claude/settings.json env BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 can stay; remove it only after a restart shows /api/context/inject 200 without it.
+```
+Then start a new Claude Code session (SessionStart starts the worker) and check `curl http://127.0.0.1:37782/api/health`: `workerPath` should be under `plugins\cache\vivek-claude-mem\claude-mem\15.0.1`.
+
+Notes:
+- First start after cutover: the orphan-recovery scan (#4690) re-feeds 5 old sessions (25 rows) once through the observer, and `ensure-launcher` recompiles `claude-mem.exe` if stale.
+- `uninstall` removes the `thedotmack` cache dir and the `enabledPlugins` key; the data dir (`~/.claude-mem`) is untouched.
+- Rolling back the rename: `claude plugin uninstall claude-mem@vivek-claude-mem`, `claude plugin marketplace remove vivek-claude-mem`, push the previous head back (`git push fork f830cccf8:refs/heads/pinned --force-with-lease`), re-add `Vivek-Yarra/claude-mem` (it then registers as `thedotmack` again), install `claude-mem@thedotmack`, restore the hms settings key.
+- Unverified until executed: `claude plugin marketplace add Vivek-Yarra/claude-mem` registering the name `vivek-claude-mem`, and Claude Code laying the cache out as `plugins/cache/vivek-claude-mem/claude-mem/<version>` (the resolvers assume this).
+
+## Original cutover (superseded by the pinned-next cutover above; do not run until the branch is pushed and reviewed)
 
 ```
 # 0. Fresh backup of the LIVE db (worker stopped) - the older backup is from 05:25 today
@@ -101,7 +183,7 @@ bun test <entries>                         # per top-level entry, see Test resul
 git add -A plugin && git commit -m "local: rebuild plugin artifacts for v<NEW> + local patches"
 git push fork pinned --force-with-lease
 ```
-Re-run the functional test on a DB copy (port 37799, Chroma disabled, fresh `BUN_RUNTIME_TRANSPILER_CACHE_PATH`). Drop patch 4 when upstream PR #4966 is in the new tag. Re-check that no upstream change adds new hard-coded `thedotmack` paths (`grep -rn thedotmack src`), and re-run the skill reference grep (a new hook or instruction may reference a trimmed skill).
+Re-run the functional test on a DB copy (port 37799, Chroma disabled, fresh `BUN_RUNTIME_TRANSPILER_CACHE_PATH`). Drop patch 4 when upstream PR #4966 is in the new tag, and drop each pinned-next cherry-pick (#4974 #4971 #4952 #4944 #4690, the Windows tree-kill reaping) once it is in the new tag. Re-check that no upstream change adds new hard-coded `thedotmack` paths (`grep -rn thedotmack src`), and re-run the skill reference grep (a new hook or instruction may reference a trimmed skill).
 
 ## Rollback to 13.35.0
 
@@ -120,7 +202,7 @@ claude plugin install claude-mem@thedotmack      # check the version is 13.35.0
 - Restore the `enabledPlugins` key in `hms\.claude\settings.json` to `claude-mem@thedotmack`.
 - PATH: the launcher directory `%LOCALAPPDATA%\claude-mem\bin` stays on the user PATH; 13.35 hooks use shell-form commands and do not need it. Remove the entry from the user PATH and delete `claude-mem.exe` only if you want a fully clean state.
 
-## Cutover as executed (2026-10-22)
+## Cutover as executed (2026-10-22, historical: state before pinned-next)
 - Marketplace rename to `vivek-claude-mem` was reverted (commit 21a2cd990): ~40 upstream code paths hard-code `plugins/{cache,marketplaces}/thedotmack`, so the MCP server kept auto-starting the old 13.35 worker. The fork keeps the name `thedotmack`; upstream's marketplace was removed and `Vivek-Yarra/claude-mem` (default branch `pinned`) was added in its place. Plugin id stays `claude-mem@thedotmack`; hms project settings unchanged.
 - Old caches 13.33.0 / 13.35.0 moved to `~/.claude-mem/backups/old-plugin-cache-2026-10-22`.
 - Fresh pre-cutover DB backup: `~/.claude-mem/backups/pre-15.0.1-local/` (70,612 observations).
