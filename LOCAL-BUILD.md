@@ -118,4 +118,4 @@ claude plugin install claude-mem@thedotmack      # check the version is 13.35.0
   - `del claude-mem.db-wal claude-mem.db-shm` in `C:\Users\ansiv\.claude-mem`, copy the chosen backup over `claude-mem.db`, restore `settings.json` from the same backup folder, start Claude Code.
   - Also expect the 15.x one-time side copies in `C:\Users\ansiv\.claude-mem\backups` (`claude-mem-pre-12.4.3-*`) and `claude-mem.db.bak-cwd-remap-*`; they can stay.
 - Restore the `enabledPlugins` key in `hms\.claude\settings.json` to `claude-mem@thedotmack`.
-- PATH: the launcher directory `%LOCALAPPDATA%\claude-mem\bin` stays on the user PATH; 13.35 hooks use bun-runner and do not need it. Remove the entry from the user PATH and delete `claude-mem.exe` only if you want a fully clean state.
+- PATH: the launcher directory `%LOCALAPPDATA%\claude-mem\bin` stays on the user PATH; 13.35 hooks use shell-form commands and do not need it. Remove the entry from the user PATH and delete `claude-mem.exe` only if you want a fully clean state.
