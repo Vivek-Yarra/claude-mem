@@ -19,7 +19,8 @@ export function isPluginDisabledInClaudeSettings(): boolean {
     if (!existsSync(settingsPath)) return false;
     const raw = readFileSync(settingsPath, 'utf-8');
     const settings = parseJsonWithBom<Record<string, any>>(raw);
-    return settings?.enabledPlugins?.[PLUGIN_SETTINGS_KEY] === false;
+    return settings?.enabledPlugins?.[PLUGIN_SETTINGS_KEY] === false
+      || settings?.enabledPlugins?.['claude-mem@vivek-claude-mem'] === false;
   } catch (error: unknown) {
     logger.error('CONFIG', 'Failed to read Claude settings', { error: error instanceof Error ? error.message : String(error) });
     return false;

@@ -102,7 +102,7 @@ describe('writeTrimmedMarketplaceManifest', () => {
 
     expect(pluginNames()).toEqual(['claude-mem']);
     const manifest = JSON.parse(readFileSync(manifestPath(), 'utf-8'));
-    expect(manifest.name).toBe('thedotmack');
+    expect(manifest.name).toBe('vivek-claude-mem');
     expect(manifest.plugins[0].source).toBe('./plugin');
   });
 
