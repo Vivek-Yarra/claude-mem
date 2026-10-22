@@ -212,7 +212,7 @@ export function shellTemplateManifest(buildShellCommand, buildCodexWindowsComman
           groupMatcher: 'startup',
           entry: { type: 'command', ...buildEnsureLauncherExecHook(), timeout: ENSURE_LAUNCHER_HOOK_TIMEOUT_SECONDS },
         },
-        'UserPromptSubmit.0.0': claudeExecHook(['hook', 'claude-code', 'session-init'], { timeout: SESSION_INIT_HOOK_TIMEOUT_SECONDS }),
+        'UserPromptSubmit.0.0': claudeExecHook(['hook', 'claude-code', 'session-init'], { timeout: SESSION_INIT_HOOK_TIMEOUT_SECONDS, async: true }),
         'PostToolUse.0.0': claudeExecHook(['hook', 'claude-code', 'observation'], { timeout: 120, async: true }, '*'),
         // A tool call that fails (e.g. Bash exiting non-zero) is delivered here
         // instead of PostToolUse, so without it memory never sees a failed attempt.

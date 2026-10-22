@@ -610,7 +610,7 @@ describe('Plugin Distribution - Non-blocking bookkeeping hooks (#3206)', () => {
     expect(sessionEnd.async).toBe(true);
   });
 
-  it('runs the SessionStart worker start asynchronously and keeps context and UserPromptSubmit synchronous (#3303)', () => {
+  it('runs the SessionStart worker start asynchronously and keeps context synchronous and runs UserPromptSubmit async (#3303, local patch)', () => {
     const hooksPath = path.join(projectRoot, 'plugin/hooks/hooks.json');
     const parsed = JSON.parse(readFileSync(hooksPath, 'utf-8'));
 
@@ -631,8 +631,8 @@ describe('Plugin Distribution - Non-blocking bookkeeping hooks (#3206)', () => {
     // timeline, the viewer link and the trial notice.
     expect(context).not.toHaveProperty('async');
     expect(userPromptSubmit.args).toEqual(['hook', 'claude-code', 'session-init']);
-    // Keep prompt-row persistence ordered before downstream hooks consume it.
-    expect(userPromptSubmit).not.toHaveProperty('async');
+    // local patch: session-init runs async so a slow worker never blocks prompt submit.
+    expect(userPromptSubmit.async).toBe(true);
   });
 
   it('keeps the PreToolUse Read file-context hook synchronous so the File Read Gate can deny', () => {
@@ -700,7 +700,7 @@ const CLAUDE_EXEC_EXPECTATIONS: Record<string, Record<string, unknown>> = {
   // Synchronous on purpose: only a sync hook's systemMessage is shown to the
   // user, and ensure-launcher.cjs reports a failed self-heal that way.
   'SessionStart.2.0': { type: 'command', ...buildEnsureLauncherExecHook(), timeout: 180 },
-  'UserPromptSubmit.0.0': claudeExecHook(['hook', 'claude-code', 'session-init'], { timeout: SESSION_INIT_HOOK_TIMEOUT_SECONDS }),
+  'UserPromptSubmit.0.0': claudeExecHook(['hook', 'claude-code', 'session-init'], { timeout: SESSION_INIT_HOOK_TIMEOUT_SECONDS, async: true }),
   'PostToolUse.0.0': claudeExecHook(['hook', 'claude-code', 'observation'], { timeout: 120, async: true }),
   'PostToolUseFailure.0.0': claudeExecHook(['hook', 'claude-code', 'observation'], { timeout: 120, async: true }),
   // Synchronous so the File Read Gate can deny a whole-file Read.

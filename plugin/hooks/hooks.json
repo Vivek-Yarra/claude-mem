@@ -69,7 +69,8 @@
               "claude-code",
               "session-init"
             ],
-            "timeout": 15
+            "timeout": 15,
+            "async": true
           }
         ]
       }
