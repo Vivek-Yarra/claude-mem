@@ -113,11 +113,6 @@ function resolvePluginRootForLauncher(): string | null {
     ...listCacheVersionRootsDescending(join(claudeConfigDirectory, 'plugins', 'cache', 'thedotmack', 'claude-mem')),
   );
   candidateRoots.push(join(claudeConfigDirectory, 'plugins', 'marketplaces', 'thedotmack', 'plugin'));
-  // local: pinned fork marketplace (claude-mem@vivek-claude-mem), used when CLAUDE_PLUGIN_ROOT is unset.
-  candidateRoots.push(
-    ...listCacheVersionRootsDescending(join(claudeConfigDirectory, 'plugins', 'cache', 'vivek-claude-mem', 'claude-mem')),
-  );
-  candidateRoots.push(join(claudeConfigDirectory, 'plugins', 'marketplaces', 'vivek-claude-mem', 'plugin'));
 
   for (const candidateRoot of candidateRoots) {
     // Same normalization as the bash template's `_E` handling: trim a trailing
@@ -145,8 +140,7 @@ function isPluginDisabledInClaudeSettings(): boolean {
     return Boolean(
       settings &&
       settings.enabledPlugins &&
-      (settings.enabledPlugins['claude-mem@thedotmack'] === false ||
-        settings.enabledPlugins['claude-mem@vivek-claude-mem'] === false)
+      settings.enabledPlugins['claude-mem@thedotmack'] === false
     );
   } catch {
     return false;
