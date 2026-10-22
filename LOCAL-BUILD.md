@@ -71,6 +71,40 @@ Copy of `backups\pre-15.0.1-local\claude-mem.db` + settings in a scratch data di
 - GitHub URLs / upstream reference: `thedotmack/claude-mem` links in sources and plugin manifests, `relayed-text.ts`, the `Header.tsx` stars button (`plugin/ui/viewer-bundle.js`).
 - Comments: `worker-utils.ts`, `marketplace.ts`, `bun-runner.js` (legacy key note).
 
+## pinned-next2 (pinned-next + six upstream PRs; branch `pinned-next2`; not pushed)
+
+Six open PRs on thedotmack/claude-mem (base `main`, none merged or closed, all MERGEABLE) were fetched from `refs/pull/N/head` and applied as one squashed commit each (`git merge --squash`, source only, CHANGELOG.md excluded; no conflicts; no `plugin/` artifacts in these commits). Order:
+
+1. `#4950` keep /api/health responsive during keyword search reads (search runs in the context-read worker; `ContextReadProtocol/WorkerClient`, `SearchManager`, `worker-service`).
+2. `#4956` preserve bounded matches in topic-focused FTS recall (`SessionSearch`).
+3. `#4960` widen filtered semantic candidates before pagination (`SearchManager`, `SearchOrchestrator`, `ChromaSearchStrategy`). Touches Chroma paths only; Chroma is not exercised here.
+4. `#4939` surface request timeout in progressive-search error and log failures (#4938).
+5. `#4941` recover Claude credential fallbacks (`GeneratorRunner`, `EnvManager.buildIsolatedEnvWithFreshOAuth`: an expired login is left to the CLI refresh flow instead of restoring the spent explicit key).
+6. `#4945` pass the combined-installer boundary suites on Windows (tests only).
+
+Then `local: rebuild plugin artifacts (pinned-next2)` (bun 1.4.3, `bun install` no changes, `npm run build`). `grep -rn thedotmack src` shows nothing new vs pinned-next (diff of src has no added `thedotmack`).
+
+CI failures upstream, checked:
+- `#4960`: one failure, its own new test `semantic-filtered-candidates` "fills partial category pages at the work cap" (5,008 ms against the 5 s timeout), a timing flake; 9,915 other tests passed. Passes locally here.
+- `#4941`: one failure, `context-builder-shared-store` "renders nothing, rather than stale local rows, when the store cannot answer" (a context-builder test, outside the files the PR touches). Not reproduced here (the file passes). Both were included.
+
+### pinned-next2 test results
+Both trees (pinned-next in a throw-away worktree with a junctioned node_modules): every `*.test.ts(x)` file (about 970) split round-robin into 4 parallel bun processes, 60 s per-test timeout, scratch HOME/USERPROFILE/CLAUDE_CONFIG_DIR/CLAUDE_MEM_DATA_DIR/port, fresh transpiler cache per group.
+- pinned-next2: 9,442 pass / 233 distinct failing names (79+54+70+30 failing lines). pinned-next baseline: about 9,380 pass / 239 distinct failing names (the baseline run overlapped a stray duplicate run on the same ports, so it is noisier than the new-tree run).
+- Fixed by the series: the `combined public installer runtime boundary` / `non-TTY public installer refusal` cases and the "isolated installer fixture" case (#4945; failed on the baseline, pass on pinned-next2) and several baseline-only flakes (npm tarball timing, hardened-options audit tests).
+- Failing on pinned-next2 only in the sweep: 31 names. Re-run in isolation, serially, on both trees (11 files): 27 of them fail identically on the baseline or pass (contention flakes: schema writer-version stamp, export-memories, project merge, Chroma singleton, ...). Four remain, all in the new PR tests and all `EBUSY: resource busy or locked, rm <temp dir>` in the test's own cleanup after its assertions ran (SQLite handle still open on Windows): #4956 `search-fts-any-term-evidence` "retains matching evidence on a read-only file-backed connection", #4956 `search-evidence-growth` (2 cases), #4950 `search-read-worker` "returns byte-identical FTS results through the worker readonly connection". They are Windows temp cleanup failures, not logic failures; on Linux CI they passed.
+- Pre-existing and unchanged: ~230 Windows/environment failures (symlink EPERM, spawn contract, Chroma singleton timeouts, ...), not triaged.
+- Isolated PR-test run: `claude-credential-fallback` 18/18, `env-isolation` (1 pre-existing failure, "never touches the worker's own paths", also fails on the baseline), `search/` (2 pre-existing "semantic search identities" failures on both trees), `context-builder-shared-store`, `semantic-filtered-candidates` pass.
+- The sweeps leave `worker-service.cjs --daemon` and `chroma-mcp`/`uv` processes behind (13 bun daemons + 16 uv/chroma/python after both sweeps); they were killed by command-line match on the repo/scratch path, the live worker under `~/.claude/plugins/cache` untouched.
+
+### pinned-next2 functional test
+Copy of `~/.claude-mem/claude-mem.db` made with the sqlite3 backup API (read-only source connection), 70,852 observations, schema 67; empty `settings.json`; scratch HOME/CLAUDE_CONFIG_DIR; port 37799; `CLAUDE_MEM_CHROMA_ENABLED=false`; fresh transpiler cache.
+- Worker started, `/api/health` ok (initialized, mcpReady). `/api/context/inject` 200: laptop_lenovo 8,975 B (0.39 s cold), MetaBots 9,784 B (0.53 s cold).
+- `/api/search?query=worker port` 200 with results; `project=MetaBots` keyword search 200 with results; `POST /api/dumb-search` MetaBots 200.
+- Health under load (#4950): 6 concurrent 50-row keyword searches while polling `/api/health` 8 times: all 200, 0.206-0.215 s each (the same as idle; the floor is curl process start on Windows).
+- Search timeout (#4939) and the credential paths (#4941) are covered by the unit tests only; not provoked live (no model access in the scratch HOME; observer logged "SDK authentication failed" for the 3 orphan-recovery sessions, same as pinned-next).
+- DB after: 70,852 observations, schema 67. Worker stopped via `/api/admin/shutdown`; no test process or port 37797-37799/37810-37820 left; live worker (15.0.1, 37782) healthy.
+
 ## Build
 
 ```
