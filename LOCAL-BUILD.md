@@ -119,3 +119,10 @@ claude plugin install claude-mem@thedotmack      # check the version is 13.35.0
   - Also expect the 15.x one-time side copies in `C:\Users\ansiv\.claude-mem\backups` (`claude-mem-pre-12.4.3-*`) and `claude-mem.db.bak-cwd-remap-*`; they can stay.
 - Restore the `enabledPlugins` key in `hms\.claude\settings.json` to `claude-mem@thedotmack`.
 - PATH: the launcher directory `%LOCALAPPDATA%\claude-mem\bin` stays on the user PATH; 13.35 hooks use shell-form commands and do not need it. Remove the entry from the user PATH and delete `claude-mem.exe` only if you want a fully clean state.
+
+## Cutover as executed (2026-10-22)
+- Marketplace rename to `vivek-claude-mem` was reverted (commit 21a2cd990): ~40 upstream code paths hard-code `plugins/{cache,marketplaces}/thedotmack`, so the MCP server kept auto-starting the old 13.35 worker. The fork keeps the name `thedotmack`; upstream's marketplace was removed and `Vivek-Yarra/claude-mem` (default branch `pinned`) was added in its place. Plugin id stays `claude-mem@thedotmack`; hms project settings unchanged.
+- Old caches 13.33.0 / 13.35.0 moved to `~/.claude-mem/backups/old-plugin-cache-2026-10-22`.
+- Fresh pre-cutover DB backup: `~/.claude-mem/backups/pre-15.0.1-local/` (70,612 observations).
+- Bun transpiler-cache bug hit the live worker (`/api/context/inject` 500 "unable to open database file"). Fix: `BUN_RUNTIME_TRANSPILER_CACHE_PATH=0` in `~/.claude/settings.json` env; worker restarted with it; inject returns 200 for all projects.
+- Launcher `claude-mem.exe` at `%LOCALAPPDATA%\claude-mem\bin`, added to the user PATH; sessions/terminals started before the cutover do not see it until restarted.
