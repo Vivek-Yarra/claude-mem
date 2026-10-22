@@ -1,6 +1,6 @@
 import { Database } from 'bun:sqlite';
-import { parentPort } from 'node:worker_threads';
-import { DB_PATH } from '../../shared/paths.js';
+import { parentPort, workerData } from 'node:worker_threads';
+import { resolveDbPath } from '../../shared/paths.js';
 import { getProjectContext } from '../../utils/project-name.js';
 import { ModeManager } from '../domain/ModeManager.js';
 import { resolveRuntimeContext } from '../hooks/runtime-selector.js';
@@ -14,8 +14,12 @@ import type { ContextReadReply, ContextReadRequest } from './ContextReadProtocol
 if (!parentPort) throw new Error('Context reader requires a worker thread');
 const port = parentPort;
 
+// The client passes the DB path in workerData; resolving it here is only a fallback for
+// a worker started without it, and reads the environment at call time.
+const dbPath: string = typeof workerData?.dbPath === 'string' && workerData.dbPath ? workerData.dbPath : resolveDbPath();
+
 function readDatabase<T>(read: (db: Database) => T): T {
-  const db = new Database(DB_PATH, { readonly: true, create: false });
+  const db = new Database(dbPath, { readonly: true, create: false });
   try {
     db.run(`PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS}`);
     db.run('PRAGMA query_only = ON');

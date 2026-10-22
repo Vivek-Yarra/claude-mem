@@ -19,9 +19,20 @@ function getDirname(): string {
 
 const _dirname = getDirname();
 
+/**
+ * Read the environment through a computed key. A literal `process.env.X`
+ * access can be inlined at transpile time by some Bun versions (and then
+ * persisted in Bun's runtime transpiler cache, oven-sh/bun#34210), freezing a
+ * stale CLAUDE_MEM_DATA_DIR into the module. A runtime key cannot be inlined.
+ */
+function readEnv(key: string): string | undefined {
+  return process.env[key];
+}
+
 export function resolveDataDir(): string {
-  if (process.env.CLAUDE_MEM_DATA_DIR) {
-    return expandHome(process.env.CLAUDE_MEM_DATA_DIR);
+  const dataDirFromEnv = readEnv('CLAUDE_MEM_DATA_DIR');
+  if (dataDirFromEnv) {
+    return expandHome(dataDirFromEnv);
   }
 
   const defaultDataDir = join(homedir(), '.claude-mem');

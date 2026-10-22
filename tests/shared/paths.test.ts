@@ -1,3 +1,4 @@
+import { readFileSync } from 'fs';
 import { describe, it, expect, afterEach } from 'bun:test';
 import {
   paths,
@@ -109,6 +110,17 @@ describe('resolveDataDir tilde expansion', () => {
   it('still returns a real env-var value when it is already absolute', () => {
     process.env.CLAUDE_MEM_DATA_DIR = sentinel;
     expect(resolveDataDir()).toBe(sentinel);
+  });
+
+  it('reads the environment on every call and never through an inlinable literal member access', () => {
+    process.env.CLAUDE_MEM_DATA_DIR = `${sentinel}/a`;
+    expect(resolveDataDir()).toBe(`${sentinel}/a`);
+    process.env.CLAUDE_MEM_DATA_DIR = `${sentinel}/b`;
+    expect(resolveDataDir()).toBe(`${sentinel}/b`);
+    // Some Bun versions inline `process.env.X` at transpile time and persist it in the
+    // runtime transpiler cache (oven-sh/bun#34210); a computed key cannot be inlined.
+    const source = readFileSync(join(import.meta.dir, '..', '..', 'src', 'shared', 'paths.ts'), 'utf-8');
+    expect(source).not.toMatch(/process\.env\.CLAUDE_MEM_DATA_DIR/);
   });
 });
 

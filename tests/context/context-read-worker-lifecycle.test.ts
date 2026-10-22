@@ -67,4 +67,28 @@ describe('context reader resource ownership', () => {
     expect(result.missing).toMatch(/open|file|database/i);
     expect(result.created).toBe(false);
   }, 20_000);
+  it('opens the database path handed over through workerData, not the data dir the thread resolves itself', () => {
+    // The client is given another database explicitly; CLAUDE_MEM_DATA_DIR (what the
+    // thread would otherwise resolve) points at a directory that has no database.
+    const other = mkdtempSync(join(tmpdir(), 'claude-mem-reader-workerdata-'));
+    const otherDb = new Database(join(other, 'other.db'));
+    otherDb.exec(`
+      CREATE TABLE sdk_sessions(project TEXT);
+      CREATE TABLE observations(project TEXT, merged_into_project TEXT);
+      CREATE TABLE session_summaries(project TEXT, merged_into_project TEXT);
+      INSERT INTO sdk_sessions VALUES ('ZED');
+    `);
+    otherDb.close();
+    try {
+      const result = runScenario(`
+        const explicit = new ContextReadWorkerClient({ dbPath: ${JSON.stringify(join(other, 'other.db'))} });
+        try {
+          console.log(JSON.stringify({ keys: await explicit.readKeys(['zed']) }));
+        } finally { await explicit.close(); }
+      `);
+      expect(result.keys).toEqual(['zed', 'ZED']);
+    } finally {
+      rmSync(other, { recursive: true, force: true });
+    }
+  }, 20_000);
 });

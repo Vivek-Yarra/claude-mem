@@ -3,6 +3,7 @@ import { Worker } from 'node:worker_threads';
 import type { ContextReadMethods, ContextReadReply, ContextReadRequest, ContextReadResult, ContextRenderRequest } from './ContextReadProtocol.js';
 import type { WorkStateEntry } from '../sqlite/work-state.js';
 import { CONTEXT_PLACEHOLDER_NONCE } from '../../shared/context-cache.js';
+import { resolveDbPath } from '../../shared/paths.js';
 
 const MAX_PENDING_READS = 64;
 
@@ -13,6 +14,13 @@ export class ContextReadWorkerClient {
   private readonly pending = new Map<number, PendingRead>();
   private nextId = 0;
   private closed = false;
+
+  /**
+   * @param options.dbPath Database the reader thread opens. Defaults to the
+   * call-time CLAUDE_MEM_DATA_DIR resolution. It is handed over via workerData
+   * so the thread never depends on a module-level DB_PATH of its own.
+   */
+  constructor(private readonly options: { dbPath?: string } = {}) {}
 
   async render(request: ContextRenderRequest): Promise<ContextReadResult> {
     return this.request('render', request);
@@ -50,7 +58,7 @@ export class ContextReadWorkerClient {
     // Standalone builds embed this entrypoint under its emitted JavaScript name.
     const entry = candidates.find(candidate => existsSync(candidate))
       ?? new URL('./context-read-worker.js', import.meta.url);
-    const worker = new Worker(entry, { workerData: { contextPlaceholderNonce: CONTEXT_PLACEHOLDER_NONCE } });
+    const worker = new Worker(entry, { workerData: { contextPlaceholderNonce: CONTEXT_PLACEHOLDER_NONCE, dbPath: this.options.dbPath ?? resolveDbPath() } });
     this.worker = worker;
     worker.on('message', (reply: ContextReadReply) => {
       const request = this.pending.get(reply.id);
