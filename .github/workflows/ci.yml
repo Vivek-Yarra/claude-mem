@@ -5,6 +5,10 @@ on:
   push:
     branches: [main]
 
+# CI runners are ephemeral: no shared Bun transpiler cache to protect (see tests/preload.ts).
+env:
+  CLAUDE_MEM_ALLOW_SHARED_BUN_CACHE: '1'
+
 jobs:
   build:
     name: typecheck · build · test · bundle-size

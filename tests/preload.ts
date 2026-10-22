@@ -4,6 +4,23 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 
 /**
+ * Transpiler-cache tripwire. Bun caches transpiled sources in a shared
+ * on-disk cache, and a module that reads process.env.CLAUDE_MEM_DATA_DIR can be
+ * cached with the temp data dir this preload sets below (oven-sh/bun#34210);
+ * the real worker then opens a database that no longer exists. Test runs must
+ * therefore use their own cache: `npm test` / `node scripts/bun-test.mjs` do
+ * this, or set BUN_RUNTIME_TRANSPILER_CACHE_PATH to a throw-away dir (or `0`).
+ * CLAUDE_MEM_ALLOW_SHARED_BUN_CACHE=1 overrides the check.
+ */
+if (!process.env.BUN_RUNTIME_TRANSPILER_CACHE_PATH && process.env.CLAUDE_MEM_ALLOW_SHARED_BUN_CACHE !== '1') {
+  console.error(
+    'Refusing to run tests against the shared Bun transpiler cache (oven-sh/bun#34210).\n' +
+    'Run `npm test` (or `node scripts/bun-test.mjs <args>`), or set BUN_RUNTIME_TRANSPILER_CACHE_PATH to a temp dir.',
+  );
+  process.exit(1);
+}
+
+/**
  * Data-dir tripwire (Phase 6, worker-restart plan): no test may ever touch the
  * real ~/.claude-mem. src/shared/paths.ts freezes DATA_DIR at first evaluation
  * (env CLAUDE_MEM_DATA_DIR wins), and module-level consts like ProcessManager's

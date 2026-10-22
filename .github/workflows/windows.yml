@@ -14,6 +14,10 @@ on:
   push:
     branches: [main]
 
+# CI runners are ephemeral: no shared Bun transpiler cache to protect (see tests/preload.ts).
+env:
+  CLAUDE_MEM_ALLOW_SHARED_BUN_CACHE: '1'
+
 jobs:
   build:
     # Pinned to windows-2022 (VS2022 / v17). The windows-latest image moved to
