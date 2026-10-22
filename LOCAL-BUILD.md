@@ -242,3 +242,6 @@ claude plugin install claude-mem@thedotmack      # check the version is 13.35.0
 - Fresh pre-cutover DB backup: `~/.claude-mem/backups/pre-15.0.1-local/` (70,612 observations).
 - Bun transpiler-cache bug hit the live worker (`/api/context/inject` 500 "unable to open database file"). Fix: `BUN_RUNTIME_TRANSPILER_CACHE_PATH=0` in `~/.claude/settings.json` env; worker restarted with it; inject returns 200 for all projects.
 - Launcher `claude-mem.exe` at `%LOCALAPPDATA%\claude-mem\bin`, added to the user PATH; sessions/terminals started before the cutover do not see it until restarted.
+
+### Version 15.0.2 (local)
+`claude plugin update` compares version strings, so the pinned-next2 rebuild kept serving the cached 15.0.1. Bumped to 15.0.2 in the same files as upstream's bump commit (package.json, plugin/package.json, plugin/.{claude,codex,qoder}-plugin/plugin.json, .claude-plugin/{plugin,marketplace}.json) and rebuilt. This is our build (v15.0.1 + local patches + upstream PRs #4950 #4956 #4960 #4939 #4941 #4945), not upstream's 15.0.2. Bump the patch version again on every local rebuild that must reach installs.
