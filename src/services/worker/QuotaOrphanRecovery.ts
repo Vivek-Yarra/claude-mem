@@ -57,6 +57,16 @@ export const ORPHAN_RECOVERY_GRACE_MS = 30 * 60_000;
 /** Sessions re-fed per round. Bounded by design — the periodic tick drains the rest. */
 export const ORPHAN_RECOVERY_MAX_SESSIONS = 5;
 
+/**
+ * Candidates read per query page. The round's session budget is applied to
+ * sessions actually re-fed, so marked / live / echo-only candidates are paged
+ * past instead of filling the round (a full page of them used to starve every
+ * recoverable session behind them).
+ */
+const ORPHAN_RECOVERY_PAGE_SIZE = 50;
+/** Upper bound on pages per round: 500 candidates examined at most. */
+const ORPHAN_RECOVERY_MAX_PAGES = 10;
+
 export const ORPHAN_RECOVERY_MARKER_FILENAME = 'orphan-replay-markers.json';
 
 /**
@@ -185,86 +195,95 @@ export async function runOrphanRecoveryScan(
   const maxSessions = options.maxSessions ?? ORPHAN_RECOVERY_MAX_SESSIONS;
   const marker = options.marker ?? getSharedMarkerStore();
 
-  const candidates = findOrphanedToolUseSessions(deps.db, {
-    cutoffEpoch: nowMs - graceMs,
-    limit: maxSessions,
-  });
-
   const result: OrphanRecoveryScanResult = {
-    candidates: candidates.length,
+    candidates: 0,
     scheduled: 0,
     skippedAlreadyScheduled: 0,
     skippedLive: 0,
     skippedExplicitMemoryOnly: 0,
   };
 
-  for (const candidate of candidates) {
-    if (marker.has(candidate.content_session_id)) {
-      result.skippedAlreadyScheduled++;
-      continue;
-    }
-    if (deps.sessionManager.getSession(candidate.session_db_id)) {
-      // A live session with unlinked rows is mid-flight work, not an orphan:
-      // its generator owns those rows and the resume sweep owns its restarts.
-      result.skippedLive++;
-      continue;
-    }
+  const pageSize = Math.max(maxSessions, ORPHAN_RECOVERY_PAGE_SIZE);
+  let offset = 0;
+  for (let page = 0; page < ORPHAN_RECOVERY_MAX_PAGES && result.scheduled < maxSessions; page++) {
+    const candidates = findOrphanedToolUseSessions(deps.db, {
+      cutoffEpoch: nowMs - graceMs,
+      limit: pageSize,
+      offset,
+    });
+    if (candidates.length === 0) break;
+    offset += candidates.length;
+    result.candidates += candidates.length;
 
-    // Ingest wrote these rows and then skipped the save_memory ones, so
-    // recovery must skip them too: re-feeding an explicit-memory echo would
-    // duplicate an already-durable note and buy the provider call ingest
-    // deliberately avoided (the `explicit_memory_write` skip).
-    const rows = getOrphanedToolUseRows(deps.db, candidate.content_session_id)
-      .filter(row => !isExplicitMemoryWrite(row.tool_name));
-    if (rows.length === 0) {
-      // Nothing to recover — but mark anyway: the rows stay unlinked forever,
-      // so without a marker this all-echo session would re-occupy one of the
-      // round's few candidate slots on every tick, crowding out real orphans.
-      marker.mark(candidate.content_session_id);
-      result.skippedExplicitMemoryOnly++;
-      continue;
-    }
-
-    // The marker lands BEFORE the re-feed: a scan that crashed mid-round must
-    // never re-feed a session it already handed off, on this tick or after a
-    // restart — that is the retry-storm shape this whole design avoids.
-    marker.mark(candidate.content_session_id);
-
-    try {
-      for (const row of rows) {
-        deps.sessionManager.queueObservation(candidate.session_db_id, {
-          tool_name: row.tool_name,
-          tool_input: row.tool_input ?? '{}',
-          tool_response: row.tool_response ?? '{}',
-          prompt_number: row.prompt_number ?? 0,
-          cwd: row.cwd ?? '',
-          agentId: row.agent_id ?? undefined,
-          agentType: row.agent_type ?? undefined,
-          // The original identity: the buffer dedups on it within this
-          // process, and the generator's late link writes observation_id back
-          // onto THESE durable rows through it.
-          toolUseId: row.tool_use_id,
-        });
+    for (const candidate of candidates) {
+      if (result.scheduled >= maxSessions) break;
+      if (marker.has(candidate.content_session_id)) {
+        result.skippedAlreadyScheduled++;
+        continue;
       }
-      logger.info('SESSION', 'Re-feeding orphaned tool uses after a restart lost their buffer', {
-        sessionId: candidate.session_db_id,
-        source: options.source,
-        contentSessionId: candidate.content_session_id,
-        rows: rows.length,
-        lastActivityEpoch: candidate.last_activity_epoch,
-      });
-      await deps.ensureGeneratorRunning(candidate.session_db_id, `orphan-recovery:${options.source}`);
-      result.scheduled++;
-    } catch (error) {
-      // The re-fed work is already in the buffer; only the kick failed. The
-      // normal resume machinery owns the session from here, so the round goes
-      // on to the next candidate instead of stranding the ones behind it.
-      logger.warn('SESSION', 'Orphan recovery kick failed; buffered work stays with the resume sweep', {
-        sessionId: candidate.session_db_id,
-        source: options.source,
-        contentSessionId: candidate.content_session_id,
-      }, error instanceof Error ? error : new Error(String(error)));
-      result.scheduled++;
+      if (deps.sessionManager.getSession(candidate.session_db_id)) {
+        // A live session with unlinked rows is mid-flight work, not an orphan:
+        // its generator owns those rows and the resume sweep owns its restarts.
+        result.skippedLive++;
+        continue;
+      }
+
+      // Ingest wrote these rows and then skipped the save_memory ones, so
+      // recovery must skip them too: re-feeding an explicit-memory echo would
+      // duplicate an already-durable note and buy the provider call ingest
+      // deliberately avoided (the `explicit_memory_write` skip).
+      const rows = getOrphanedToolUseRows(deps.db, candidate.content_session_id)
+        .filter(row => !isExplicitMemoryWrite(row.tool_name));
+      if (rows.length === 0) {
+        // Nothing to recover — but mark anyway: the rows stay unlinked forever,
+        // so without a marker this all-echo session would re-occupy one of the
+        // round's few candidate slots on every tick, crowding out real orphans.
+        marker.mark(candidate.content_session_id);
+        result.skippedExplicitMemoryOnly++;
+        continue;
+      }
+
+      // The marker lands BEFORE the re-feed: a scan that crashed mid-round must
+      // never re-feed a session it already handed off, on this tick or after a
+      // restart — that is the retry-storm shape this whole design avoids.
+      marker.mark(candidate.content_session_id);
+
+      try {
+        for (const row of rows) {
+          deps.sessionManager.queueObservation(candidate.session_db_id, {
+            tool_name: row.tool_name,
+            tool_input: row.tool_input ?? '{}',
+            tool_response: row.tool_response ?? '{}',
+            prompt_number: row.prompt_number ?? 0,
+            cwd: row.cwd ?? '',
+            agentId: row.agent_id ?? undefined,
+            agentType: row.agent_type ?? undefined,
+            // The original identity: the buffer dedups on it within this
+            // process, and the generator's late link writes observation_id back
+            // onto THESE durable rows through it.
+            toolUseId: row.tool_use_id,
+          });
+        }
+        logger.info('SESSION', 'Re-feeding orphaned tool uses after a restart lost their buffer', {
+          sessionId: candidate.session_db_id,
+          source: options.source,
+          contentSessionId: candidate.content_session_id,
+          rows: rows.length,
+          lastActivityEpoch: candidate.last_activity_epoch,
+        });
+        await deps.ensureGeneratorRunning(candidate.session_db_id, `orphan-recovery:${options.source}`);
+        result.scheduled++;
+      } catch (error) {
+        // The re-fed work is already in the buffer; only the kick failed. The
+        // normal resume machinery owns the session from here, so the round goes
+        // on to the next candidate instead of stranding the ones behind it.
+        logger.warn('SESSION', 'Orphan recovery kick failed; buffered work stays with the resume sweep', {
+          sessionId: candidate.session_db_id,
+          source: options.source,
+          contentSessionId: candidate.content_session_id,
+        }, error instanceof Error ? error : new Error(String(error)));
+        result.scheduled++;
+      }
     }
   }
 

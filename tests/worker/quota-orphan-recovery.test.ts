@@ -322,6 +322,30 @@ describe('runOrphanRecoveryScan (re-feed + marker)', () => {
     expect(warnLines.some(line => line.startsWith('Orphan recovery kick failed'))).toBe(true);
   });
 
+  it('recovers work behind a full page of skipped sessions, in the first round and the next (#4690 review P1)', async () => {
+    const now = Date.now();
+    // Five OLDER sessions holding only explicit-memory echoes fill the default 5-session budget...
+    for (let i = 0; i < 5; i++) {
+      seedOrphan(store!, { contentSessionId: `cs-echo-${i}`, sessionDbId: 700 + i, toolUseId: `toolu_e${i}`, toolName: 'save_memory', createdAtEpoch: now - (10 + i) * HOUR });
+    }
+    // ...and a newer session with real lost work sits behind them.
+    seedOrphan(store!, { contentSessionId: 'cs-real', sessionDbId: 799, toolUseId: 'toolu_real', createdAtEpoch: now - 2 * HOUR });
+    const manager = fakeSessionManager();
+    const marker = new OrphanReplayMarkerStore(markerPath);
+
+    const first = await runOrphanRecoveryScan(scanDeps(store!.db, manager), { source: 'test', marker });
+    expect(first.skippedExplicitMemoryOnly).toBe(5);
+    expect(first.scheduled).toBe(1);
+    expect(manager.queued.map(q => q.sessionDbId)).toEqual([799]);
+
+    // A later round must not re-feed it and must not be blocked by the marked sessions.
+    seedOrphan(store!, { contentSessionId: 'cs-real-2', sessionDbId: 798, toolUseId: 'toolu_real2', createdAtEpoch: now - 2 * HOUR });
+    const second = await runOrphanRecoveryScan(scanDeps(store!.db, manager), { source: 'test', marker });
+    expect(second.scheduled).toBe(1);
+    expect(second.skippedAlreadyScheduled).toBe(6);
+    expect(manager.queued.map(q => q.sessionDbId)).toEqual([799, 798]);
+  });
+
   it('caps a round at maxSessions (bounded, the rest wait for the next tick)', async () => {
     const now = Date.now();
     for (let i = 0; i < 4; i++) {

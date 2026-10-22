@@ -498,6 +498,8 @@ export interface OrphanedToolUseSessionQuery {
   cutoffEpoch: number;
   /** Upper bound on returned sessions: a recovery round is bounded by design. */
   limit: number;
+  /** Rows to skip, for paging past candidates the caller has already handled. */
+  offset?: number;
 }
 
 /**
@@ -532,8 +534,12 @@ export function findOrphanedToolUseSessions(
     GROUP BY session_db_id, content_session_id
     HAVING MAX(created_at_epoch) <= ?
     ORDER BY MAX(created_at_epoch) ASC, session_db_id ASC
-    LIMIT ?
-  `).all(query.cutoffEpoch, Math.max(1, Math.floor(query.limit))) as OrphanedToolUseSession[];
+    LIMIT ? OFFSET ?
+  `).all(
+    query.cutoffEpoch,
+    Math.max(1, Math.floor(query.limit)),
+    Math.max(0, Math.floor(query.offset ?? 0)),
+  ) as OrphanedToolUseSession[];
 }
 
 /**
