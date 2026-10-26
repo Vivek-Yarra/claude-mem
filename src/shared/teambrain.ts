@@ -487,6 +487,7 @@ export const TEAMBRAIN_DISCOVERY_LINE =
   'New: TeamBrain shows your team who is working on what, inside every session. Start one: npx claude-mem teambrain start';
 
 export function hasShownTeamBrainDiscoveryNotice(dataDir: string = paths.dataDir()): boolean {
+  if (process.env.CLAUDE_MEM_HIDE_PROMOS === '1') return true;
   return existsSync(join(dataDir, TEAMBRAIN_DISCOVERY_NOTICE_MARKER));
 }
 

@@ -61,5 +61,6 @@ export const PRO_TRIAL_PITCH = `${PRO_TRIAL_LABEL} — memory runs off-plan. Get
  * proTrialUrl() instead so the escape codes stay at the presentation layer.
  */
 export function proTrialLine(source: ProPromoSource): string {
+  if (process.env.CLAUDE_MEM_HIDE_PROMOS === '1') return '';
   return `${String.fromCodePoint(0x2728)} ${PRO_TRIAL_PITCH} ${proTrialUrl(source)}`;
 }
