@@ -37,6 +37,11 @@ if (!process.env.CLAUDE_MEM_DATA_DIR) {
   process.env.CLAUDE_MEM_DATA_DIR = mkdtempSync(join(tmpdir(), 'claude-mem-test-run-'));
 }
 
+// local: the developer's Claude session exports CLAUDE_MEM_QUOTA_GUARD_OFF=1;
+// suites assert upstream guard behavior, so start every run with it unset.
+// tests/local/quota-guard-off.test.ts sets it per test.
+delete process.env.CLAUDE_MEM_QUOTA_GUARD_OFF;
+
 /**
  * Global posthog-node mock, registered via bunfig.toml [test].preload BEFORE
  * any test file or src module loads. It must be global, not per-file:
