@@ -225,6 +225,7 @@ export interface SettingsDefaults {
   CLAUDE_MEM_QUOTA_THRESHOLD_SEVEN_DAY_OPUS: string;
   CLAUDE_MEM_QUOTA_THRESHOLD_SEVEN_DAY_SONNET: string;
   CLAUDE_MEM_QUOTA_THRESHOLD_OVERAGE: string;
+  CLAUDE_MEM_QUOTA_GUARD_OFF: string; // local
   CLAUDE_MEM_DATA_DIR: string;
   CLAUDE_MEM_LOG_LEVEL: string;
   CLAUDE_MEM_PYTHON_VERSION: string;
@@ -487,6 +488,7 @@ export class SettingsDefaultsManager {
     CLAUDE_MEM_QUOTA_THRESHOLD_SEVEN_DAY_OPUS: '0.93',
     CLAUDE_MEM_QUOTA_THRESHOLD_SEVEN_DAY_SONNET: '0.92',
     CLAUDE_MEM_QUOTA_THRESHOLD_OVERAGE: '0.95',
+    CLAUDE_MEM_QUOTA_GUARD_OFF: '0',  // local: '1' skips the utilization thresholds and reset buffer; provider rejections still stop the observer
     CLAUDE_MEM_DATA_DIR: join(homedir(), '.claude-mem'),
     CLAUDE_MEM_LOG_LEVEL: 'INFO',
     CLAUDE_MEM_PYTHON_VERSION: '3.13',

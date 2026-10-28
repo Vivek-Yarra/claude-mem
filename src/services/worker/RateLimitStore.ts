@@ -535,7 +535,7 @@ function localGuard(
   threshold: number | undefined,
   now: number,
 ): QuotaDecision | undefined {
-  if (process.env.CLAUDE_MEM_QUOTA_GUARD_OFF === '1') return undefined;
+  if (SettingsDefaultsManager.loadFromFile(USER_SETTINGS_PATH).CLAUDE_MEM_QUOTA_GUARD_OFF === '1') return undefined;
   const util = entry.utilization;
   // An explicit false means the provider is not charging the overage bucket,
   // so its utilization does not represent active quota consumption.

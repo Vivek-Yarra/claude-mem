@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { RateLimitStore, shouldAbortForQuota } from '../../src/services/worker/RateLimitStore.js';
+import { USER_SETTINGS_PATH } from '../../src/shared/paths.js';
 
 const FIXED_NOW = 1_700_000_000_000;
 
@@ -28,6 +30,19 @@ describe('CLAUDE_MEM_QUOTA_GUARD_OFF', () => {
     const decision = shouldAbortForQuota('cli', store, FIXED_NOW);
     expect(decision.abort).toBe(true);
     expect(decision.pause?.kind).toBe('quota_exhausted');
+  });
+
+  it('does not abort on utilization when set to 1 in settings.json', () => {
+    delete process.env.CLAUDE_MEM_QUOTA_GUARD_OFF;
+    const original = existsSync(USER_SETTINGS_PATH) ? readFileSync(USER_SETTINGS_PATH, 'utf-8') : null;
+    try {
+      writeFileSync(USER_SETTINGS_PATH, JSON.stringify({ CLAUDE_MEM_QUOTA_GUARD_OFF: '1' }));
+      store.set({ rateLimitType: 'seven_day', utilization: 0.99, status: 'allowed_warning' });
+      expect(shouldAbortForQuota('cli', store, FIXED_NOW).abort).toBe(false);
+    } finally {
+      if (original === null) rmSync(USER_SETTINGS_PATH, { force: true });
+      else writeFileSync(USER_SETTINGS_PATH, original);
+    }
   });
 
   it('keeps upstream behavior when unset', () => {
